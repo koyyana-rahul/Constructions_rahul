@@ -1,0 +1,25 @@
+# === FRONTEND (BuildSync-CLIENT) ===
+/BuildSync-CLIENT/node_modules/
+/BuildSync-CLIENT/dist/
+/BuildSync-CLIENT/.env
+/BuildSync-CLIENT/.env.*.local
+
+# === BACKEND (BuildSync-API) ===
+/BuildSync-API/node_modules/
+/BuildSync-API/dist/
+/BuildSync-API/build/
+/BuildSync-API/logs/
+/BuildSync-API/*.log
+/BuildSync-API/.env
+/BuildSync-API/.env.*.local
+
+# Ignoră conținutul din uploads
+/BuildSync-API/public/uploads/*
+
+# === COMUNE ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+.env

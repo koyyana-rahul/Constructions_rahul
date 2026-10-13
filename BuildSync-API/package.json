@@ -1,0 +1,29 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --env-file=.env --test tests/*.test.js",
+    "start": "nodemon --env-file=.env index.js",
+    "test:watch": "node --env-file=.env --test --watch tests/*.test.js",
+    "migrate": "node --env-file=.env scripts/migrate.js",
+    "seed": "node --env-file=.env userSeed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.0",
+    "express-validator": "^7.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.6.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemon": "^3.1.4",
+    "path": "^0.12.7"
+  },
+  "main": "index.js"
+}

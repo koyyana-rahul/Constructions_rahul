@@ -1,0 +1,131 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Barlow+Condensed:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-concrete-100 font-sans text-sm text-navy-900 antialiased;
+  }
+
+  /* Visible, consistent keyboard focus across every interactive control. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-white;
+  }
+
+  /* Remove the numeric spinners that break table alignment. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-concrete-100;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-concrete-300;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-concrete-400;
+  }
+
+  /* Honour the OS reduced-motion setting. Shimmer, spinner and panel
+     transitions collapse to near-zero rather than being removed outright,
+     so loading states still read as "busy". */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------------
+     react-data-table-component theming.
+     Scoped to .bs-table so library internals can never leak elsewhere.
+     --------------------------------------------------------------------- */
+  .bs-table .rdt_Table {
+    @apply bg-white;
+  }
+
+  .bs-table .rdt_TableHead {
+    @apply border-b border-concrete-200 bg-concrete-50;
+  }
+
+  .bs-table .rdt_TableHeadRow {
+    @apply border-none;
+  }
+
+  .bs-table .rdt_TableHeadCell {
+    @apply border-none bg-concrete-50 py-3 pl-4 pr-4 font-display text-xs font-semibold uppercase tracking-wider text-navy-600;
+  }
+
+  .bs-table .rdt_TableBodyRow {
+    @apply border-b border-concrete-100 bg-white transition-colors duration-150;
+  }
+
+  .bs-table .rdt_TableBodyRow:hover {
+    @apply bg-navy-50/60;
+  }
+
+  .bs-table .rdt_TableBodyRow:last-child {
+    @apply border-b-0;
+  }
+
+  .bs-table .rdt_TableCell {
+    @apply border-none py-3 pl-4 pr-4 text-sm text-concrete-700;
+  }
+
+  /* Sort arrows */
+  .bs-table .rdt_TableColSort {
+    @apply text-concrete-400;
+  }
+  .bs-table .rdt_TableColSort:hover {
+    @apply bg-transparent text-navy-700;
+  }
+
+  /* Search + pagination chrome */
+  .bs-table .rdt_paginate {
+    @apply text-concrete-600;
+  }
+  .bs-table .rdt_paginate .rdt_pagination {
+    @apply border-t border-concrete-200 bg-white;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element {
+    @apply border-none bg-transparent;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element.active {
+    @apply bg-transparent;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element.active:hover {
+    @apply bg-accent-50 text-accent-700;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element > span {
+    @apply rounded px-2 py-1 font-display text-sm font-semibold;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element.active > span {
+    @apply bg-accent-600 text-white;
+  }
+  .bs-table .rdt_paginate .rdt_pagination .rdt_pagination_element button:hover {
+    @apply bg-concrete-100 text-navy-800;
+  }
+
+  .bs-table .rdt_no_data {
+    @apply w-full py-2;
+  }
+}
