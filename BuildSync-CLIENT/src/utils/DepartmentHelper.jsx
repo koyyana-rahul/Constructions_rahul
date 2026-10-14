@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuPencil, LuArchive, LuArchiveRestore } from "react-icons/lu";
-import { api, getErrorMessage } from "../lib/api";
-import { useMutation } from "../hooks/useQuery";
 import { IconAction, RowActions } from "./tableUtils";
 import { StatusBadge } from "../components/ui/Badge";
 import ConfirmDialog, { useConfirm } from "../components/ui/ConfirmDialog";
+import { useSetDepartmentArchivedMutation } from "../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../lib/api";
 
 export const columns = [
   {
@@ -59,30 +58,18 @@ export const columns = [
  * only ever fail. Archiving closes a site to new work and deactivates its
  * employees while retaining attendance, leave and payroll history.
  */
-export const DepartmentButtons = ({ Id, name, isArchived, onDepartmentDelete }) => {
+export const DepartmentButtons = ({ Id, name, isArchived }) => {
   const navigate = useNavigate();
-  const [error, setError] = useState(null);
   const confirm = useConfirm();
-
-  const { mutate: setArchived } = useMutation(
-    async (archive) => {
-      const { data } = await api.put(`/department/${Id}/${archive ? "archive" : "restore"}`);
-      if (!data.success) throw new Error(`Could not update the site.`);
-      return data;
-    },
-    { invalidate: ["departments", "employees", "dashboard-summary", "attendance"] }
-  );
+  const [setArchived, { isPending }] = useSetDepartmentArchivedMutation();
 
   const handleToggle = async () => {
     confirm.setLoading(true);
-    setError(null);
     try {
-      await setArchived(!isArchived);
+      await setArchived({ id: Id, archive: !isArchived }).unwrap();
       confirm.close();
-      onDepartmentDelete?.();
-    } catch (err) {
-      confirm.close();
-      setError(getErrorMessage(err, "Could not update the site."));
+    } catch {
+      /* the message is rendered from the mutation error below */
     } finally {
       confirm.setLoading(false);
     }
@@ -95,7 +82,7 @@ export const DepartmentButtons = ({ Id, name, isArchived, onDepartmentDelete }) 
           <IconAction
             title="Edit site"
             onClick={() => navigate(`/admin-dashboard/department/${Id}`)}
-            disabled={confirm.loading}
+            disabled={isPending}
           >
             <LuPencil className="h-4 w-4" aria-hidden="true" />
           </IconAction>
@@ -103,7 +90,7 @@ export const DepartmentButtons = ({ Id, name, isArchived, onDepartmentDelete }) 
             title={isArchived ? "Restore site" : "Archive site"}
             tone={isArchived ? "accent" : "danger"}
             onClick={() => confirm.open(Id)}
-            disabled={confirm.loading}
+            disabled={isPending}
           >
             {isArchived ? (
               <LuArchiveRestore className="h-4 w-4" aria-hidden="true" />
@@ -112,9 +99,9 @@ export const DepartmentButtons = ({ Id, name, isArchived, onDepartmentDelete }) 
             )}
           </IconAction>
         </RowActions>
-        {error && (
+        {setArchived.error && (
           <span role="alert" className="max-w-[14rem] text-center text-2xs text-danger-600">
-            {error}
+            {getErrorMessage(setArchived.error, "Could not update the site.")}
           </span>
         )}
       </div>

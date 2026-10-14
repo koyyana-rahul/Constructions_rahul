@@ -22,7 +22,10 @@ import Button from "../ui/Button";
 import { Alert } from "../ui/Feedback";
 import { Card, CardBody } from "../ui/Card";
 import PageHeader from "../ui/PageHeader";
-import { api, getErrorMessage } from "../../lib/api";
+import {
+  useAddClientMutation,
+} from "../../services/api/endpoints/clientsApi";
+import { getErrorMessage, getFieldErrors, getErrorCode } from "../../lib/api";
 
 const AddClient = () => {
   const navigate = useNavigate();
@@ -37,9 +40,10 @@ const AddClient = () => {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
   const [invitation, setInvitation] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const [createInvitation, { isLoading: submitting }] = useAddClientMutation();
 
   const handleChange = (event) => {
     const { name, value, files } = event.target;
@@ -86,7 +90,6 @@ const AddClient = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     setFieldErrors([]);
 
@@ -99,29 +102,21 @@ const AddClient = () => {
       payload.append("entityType", client.entityType);
       if (client.image) payload.append("image", client.image);
 
-      const { data } = await api.post("/client/add", payload);
-      if (data.success) {
-        // Show the one-time activation link instead of navigating away.
-        setInvitation(data);
-      }
+      // Show the one-time activation link instead of navigating away.
+      const result = await createInvitation(payload).unwrap();
+      setInvitation(result);
     } catch (err) {
-      const serverFieldErrors = err?.response?.data?.errors;
-      if (Array.isArray(serverFieldErrors) && serverFieldErrors.length) {
-        const mapped = {};
-        serverFieldErrors.forEach(({ field, message }) => {
-          mapped[field] = message;
-        });
+      const mapped = getFieldErrors(err);
+      if (Object.keys(mapped).length) {
         setErrors(mapped);
         setFieldErrors(Object.values(mapped));
-      } else if (err?.response?.data?.code === "INVITATION_PENDING") {
+      } else if (getErrorCode(err) === "INVITATION_PENDING") {
         setError(
           "An invited account already exists for that email and has not been activated yet. Resend the invitation from the clients list."
         );
       } else {
         setError(getErrorMessage(err, "Unable to create the client invitation."));
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 

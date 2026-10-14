@@ -8,9 +8,9 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { useGetEmployeeLeavesQuery } from "../../services/api/endpoints/leavesApi";
+import { getErrorMessage } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 import EmployeeContextHeader, {
   EmployeeCrumb,
 } from "../employee/EmployeeContextHeader";
@@ -84,20 +84,26 @@ function formatDate(value) {
  */
 const LeaveList = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
   const isEmployeeSelf = user?.role === "employee";
   const role = user?.role ?? "employee";
 
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["leaves", "mine", id, role],
-    async () => {
-      const { data: res } = await api.get(`/leave/${id}/${role}`);
-      return res.success ? res.leaves || [] : [];
-    },
-    { staleTime: 10_000, poll: 30_000 }
+  /**
+   * `id` and `role` are part of the RTK Query cache key, so Employee A's
+   * history and Employee B's history are separate entries. Switching employees
+   * switches the key, which means the previous employee's rows can never be
+   * shown against the new selection - and a late response for the old id is
+   * discarded rather than written over the new one.
+   *
+   * The URL id is a locator only: for a non-admin the backend ignores it and
+   * resolves the employee from the verified token.
+   */
+  const { data, error, isLoading, isFetching, refetch } = useGetEmployeeLeavesQuery(
+    { id, role },
+    { skip: !id }
   );
 
   const leaves = useMemo(
@@ -142,7 +148,7 @@ const LeaveList = () => {
         }
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             {isEmployeeSelf && (

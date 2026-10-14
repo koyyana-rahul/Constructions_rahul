@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   LuLock,
@@ -14,7 +14,11 @@ import AuthLayout from "../components/layout/AuthLayout";
 import Button from "../components/ui/Button";
 import { Input, Checkbox } from "../components/ui/Form";
 import { Alert, Spinner, EmptyState } from "../components/ui/Feedback";
-import { api, getErrorMessage } from "../lib/api";
+import { getErrorMessage } from "../lib/api";
+import {
+  useVerifyActivationTokenQuery,
+  useActivateAccountMutation,
+} from "../services/api/endpoints/authApi";
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (v) => v.length >= 8 },
@@ -32,38 +36,23 @@ const Activate = () => {
 
   const token = params.get("token") || "";
 
-  const [checking, setChecking] = useState(Boolean(token));
-  const [invite, setInvite] = useState(null);
-  const [tokenError, setTokenError] = useState(null);
-
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  // Validate the invitation link before showing the form.
-  useEffect(() => {
-    if (!token) return;
+  // The invitation link is validated before the form is offered. RTK Query
+  // keys the result on the token, so re-visiting a link already verified in
+  // this session renders instantly and only re-checks after the cache expires.
+  const {
+    data: invite,
+    isFetching: checking,
+    error: tokenError,
+  } = useVerifyActivationTokenQuery(token, { skip: !token });
 
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get(`/auth/activate?token=${encodeURIComponent(token)}`);
-        if (!cancelled) setInvite(data);
-      } catch (err) {
-        if (!cancelled) setTokenError(getErrorMessage(err, "This activation link is not valid."));
-      } finally {
-        if (!cancelled) setChecking(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  const [activateAccount, { isLoading: submitting }] = useActivateAccountMutation();
 
   const passwordToggle = useMemo(
     () => (
@@ -101,16 +90,13 @@ const Activate = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
 
     try {
-      const { data } = await api.post("/auth/activate", { token, password });
-      if (data.success) navigate("/login", { state: { activated: true }, replace: true });
+      await activateAccount({ token, password }).unwrap();
+      navigate("/login", { state: { activated: true }, replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Unable to activate your account."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -170,7 +156,7 @@ const Activate = () => {
         <EmptyState
           icon={LuKeyRound}
           title="Link not valid"
-          description={tokenError}
+          description={getErrorMessage(tokenError, "This activation link is not valid.")}
           action={
             <Link
               to="/login"

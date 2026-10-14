@@ -5,8 +5,11 @@ import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { Input } from "../ui/Form";
 import Button from "../ui/Button";
 import { Alert } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { getErrorMessage } from "../../lib/api";
+import { useChangePasswordMutation } from "../../services/api/endpoints/settingsApi";
+import { useCurrentUser } from "../../features/auth/useSession";
+import { selectHomePath } from "../../features/auth/authSelectors";
+import { useAppSelector } from "../../app/hooks";
 
 /**
  * Shared change-password form.
@@ -14,13 +17,18 @@ import { useAuth } from "../../context/AuthContext";
  * The two previous copies declared `userId: user._id` in the payload but then
  * navigated to `/admin-dashboard/employees` on success regardless of role, so
  * an employee saving their password was thrown into the admin employee list.
- * The destination is now derived from the user's actual role.
+ * The destination now comes from the single `selectHomePath` selector that
+ * also drives the post-login redirect, so the two can never disagree.
+ *
+ * `confirmPassword` is validated locally and never sent; the payload carries
+ * only the two fields the server actually reads.
  */
 const ChangePassword = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
+  const homePath = useAppSelector(selectHomePath);
+  const [changePassword, { isLoading: submitting }] = useChangePasswordMutation();
 
   const [form, setForm] = useState({
-    userId: user?._id,
     oldPassword: "",
     newPassword: "",
     confirmPassword: "",
@@ -28,13 +36,6 @@ const ChangePassword = () => {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const homeByRole = {
-    admin: "/admin-dashboard",
-    employee: "/employee-dashboard",
-    client: "/client-dashboard",
-  };
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -63,19 +64,19 @@ const ChangePassword = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     setNotice(null);
     try {
-      const { data } = await api.put("/setting/change-password", form);
-      if (data.success) {
-        setNotice("Password updated successfully.");
-        setForm((prev) => ({ ...prev, oldPassword: "", newPassword: "", confirmPassword: "" }));
-      }
+      await changePassword({
+        oldPassword: form.oldPassword,
+        newPassword: form.newPassword,
+      }).unwrap();
+      setNotice("Password updated successfully.");
+      // The confirmation field is cleared too, so the form cannot be resubmitted
+      // with a stale match against a now-blank new password.
+      setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update your password."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -85,7 +86,7 @@ const ChangePassword = () => {
         title="Settings"
         description="Manage your account security and preferences."
         breadcrumbs={[
-          { label: "Dashboard", to: homeByRole[user?.role] || "/login" },
+          { label: "Dashboard", to: homePath },
           { label: "Settings" },
         ]}
       />

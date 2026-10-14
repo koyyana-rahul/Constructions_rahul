@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { LuCheck, LuX, LuHeartPulse, LuCalendarDays } from "react-icons/lu";
-import { api, getErrorMessage } from "../lib/api";
-import { useMutation } from "../hooks/useQuery";
 import { StatusBadge } from "../components/ui/Badge";
+import { useUpdateAttendanceMutation } from "../services/api/endpoints/attendanceApi";
+import { getErrorMessage } from "../lib/api";
 
 export const columns = [
   {
@@ -31,7 +30,7 @@ export const columns = [
     selector: (row) => row.department,
     cell: (row) => (
       <span className="font-display text-xs font-semibold uppercase tracking-wide text-navy-700">
-        {row.department}
+        {row.department || "—"}
       </span>
     ),
   },
@@ -40,7 +39,11 @@ export const columns = [
     selector: (row) => row.status,
     width: "130px",
     cell: (row) =>
-      row.status ? <StatusBadge status={row.status} /> : <StatusBadge tone="neutral">Not marked</StatusBadge>,
+      row.status ? (
+        <StatusBadge status={row.status} />
+      ) : (
+        <StatusBadge tone="neutral">Not marked</StatusBadge>
+      ),
   },
   {
     name: "Mark",
@@ -66,38 +69,28 @@ const TONES = {
     "border-warning-500/40 bg-warning-50 text-warning-700 hover:bg-warning-100 hover:border-warning-500",
 };
 
-/** Per-employee attendance marking. Values match the backend's expected statuses. */
-export const AttendanceHelper = ({ status, employeeId, statusChange }) => {
-  const [error, setError] = useState(null);
-  const [pending, setPending] = useState(false);
-
-  // Refreshing the list after the server confirms the mark keeps every
-  // summary on the page in step - no manual refresh required.
-  const { mutate: markEmployee } = useMutation(
-    async (value) => {
-      const { data } = await api.put(`/attendance/update/${employeeId}`, { status: value });
-      if (!data.success) throw new Error("Could not save attendance.");
-      return data;
-    },
-    { invalidate: ["attendance", "dashboard-summary"] }
-  );
-
-  const run = async (value) => {
-    setError(null);
-    setPending(true);
-    try {
-      await markEmployee(value);
-      statusChange?.();
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not save attendance."));
-    } finally {
-      setPending(false);
-    }
-  };
+/**
+ * Per-employee attendance marking.
+ *
+ * `isPending` disables every option while the write is in flight, so a double
+ * click cannot submit two conflicting marks. On success RTK Query invalidates
+ * the Attendance and Dashboard tags, which refreshes this list, the summary
+ * tiles and the per-employee sheet without a manual refresh.
+ */
+export const AttendanceHelper = ({ status, employeeId }) => {
+  const [markAttendance, { isPending }] = useUpdateAttendanceMutation();
 
   if (status != null) {
     return <StatusBadge status={status} />;
   }
+
+  const run = async (value) => {
+    try {
+      await markAttendance({ employeeId, status: value }).unwrap();
+    } catch {
+      /* the error is rendered from the hook below on the next render */
+    }
+  };
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -110,7 +103,7 @@ export const AttendanceHelper = ({ status, employeeId, statusChange }) => {
           <button
             key={value}
             type="button"
-            disabled={pending}
+            disabled={isPending}
             onClick={() => run(value)}
             title={`Mark as ${label}`}
             aria-label={`Mark as ${label}`}
@@ -123,11 +116,14 @@ export const AttendanceHelper = ({ status, employeeId, statusChange }) => {
           </button>
         ))}
       </div>
-      {error && (
-        <span role="alert" className="max-w-[14rem] text-center text-2xs text-danger-600">
-          {error}
-        </span>
-      )}
+      <AttendanceError error={markAttendance.error} />
     </div>
   );
 };
+
+const AttendanceError = ({ error }) =>
+  error ? (
+    <span role="alert" className="max-w-[14rem] text-center text-2xs text-danger-600">
+      {getErrorMessage(error, "Could not save attendance.")}
+    </span>
+  ) : null;

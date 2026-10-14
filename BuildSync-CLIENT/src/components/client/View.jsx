@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { LuPencil, LuMail, LuPhone, LuBuilding2, LuBriefcase, LuCalendar } from "react-icons/lu";
 import PageHeader from "../ui/PageHeader";
@@ -7,78 +7,72 @@ import { Card, CardHeader, CardBody } from "../ui/Card";
 import DetailList, { DetailField } from "../ui/DetailList";
 import Avatar from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
-import { Alert, PageLoader, EmptyState } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import { Alert, PageLoader, EmptyState, PermissionDenied } from "../ui/Feedback";
+import { useGetClientQuery } from "../../services/api/endpoints/clientsApi";
+import { useGetWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
 import { formatDate } from "../../utils/tableUtils";
-import { useAuth } from "../../context/AuthContext";
+import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 
 /**
  * Client profile. Shared by the admin route and the client's own
  * `/client-dashboard/profile/:id` route.
+ *
+ * The API scopes `GET /client/:id` to the owner, so the `id` in the URL is a
+ * locator, not proof of identity - a client opening someone else's id gets a
+ * 403 from the server, rendered as PermissionDenied rather than a blank page.
  */
 const ClientView = () => {
   const { id } = useParams();
-  const { user } = useAuth();
-  const [client, setClient] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const user = useCurrentUser();
 
-  const isSelf = user?.role === "client" && user?._id === id;
+  // The route id is the Client record id on the admin route and the User id on
+  // the self-service route, so this comparison is the "am I looking at myself?"
+  // test rather than an authorization check.
+  const isSelf = user?.role === "client" && (user?._id === id || client?.userId?._id === id);
 
-  const fetchClient = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get(`/client/${id}`);
-      if (data.success && data.client) {
-        setClient(data.client);
-      } else {
-        setError("Client record not found.");
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the client profile."));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const {
+    data: client,
+    error,
+    isLoading: loading,
+  } = useGetClientQuery(id, { skip: !id });
 
-  useEffect(() => {
-    fetchClient();
-  }, [fetchClient]);
+  // Work requests are supplementary context; the server already scopes this
+  // list to the caller, so nothing is filtered in the browser.
+  const { data: allRequests = [] } = useGetWorkRequestsQuery(
+    { limit: 100 },
+    { skip: user?.role !== "admin" }
+  );
 
-  useEffect(() => {
-    // Work requests are supplementary context; a failure here must not
-    // break the profile page.
-    api
-      .get("/work-request")
-      .then(({ data }) => {
-        if (data.success) {
-          setRequests(
-            (data.requests || []).filter(
-              (request) => request.clientId?._id === (client?.userId?._id ?? id)
-            )
-          );
-        }
-      })
-      .catch(() => setRequests([]));
-  }, [id, client?.userId?._id]);
+  const requests = useMemo(() => {
+    if (user?.role !== "admin") return [];
+    const owner = client?.userId?._id ?? client?._id ?? id;
+    return allRequests.filter((request) => request.clientId?._id === owner);
+  }, [allRequests, client, id, user?.role]);
 
   if (loading) return <PageLoader label="Loading client profile" />;
 
   if (!client) {
+    if (isPermissionError(error)) {
+      return (
+        <>
+          <PageHeader title="Client Profile" />
+          <Card>
+            <PermissionDenied description={getErrorMessage(error, null)} />
+          </Card>
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="Client Profile" />
-        <Alert variant="error">{error || "Client record not found."}</Alert>
+        <Alert variant="error">{error ? getErrorMessage(error, null) : "Client record not found."}</Alert>
       </>
     );
   }
 
   const { userId = {} } = client;
-  const avatar = userId.profileImage
-    ? `http://localhost:5000/${userId.profileImage}`
-    : undefined;
+  const avatar = assetUrl(userId.profileImage);
 
   const approved = requests.filter((r) => r.status === "Approved").length;
   const pending = requests.filter((r) => r.status === "Pending").length;

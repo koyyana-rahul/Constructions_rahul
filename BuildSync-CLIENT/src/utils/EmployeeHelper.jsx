@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LuEye, LuPencil, LuWallet, LuCalendarDays } from "react-icons/lu";
-import { api, getErrorMessage } from "../lib/api";
+import { LuEye, LuPencil, LuWallet, LuCalendarDays, LuCalendarCheck } from "react-icons/lu";
 import { IconAction, RowActions, formatDate } from "./tableUtils";
 import Avatar from "../components/ui/Avatar";
 
@@ -53,10 +52,17 @@ export const columns = [
     name: "Actions",
     selector: (row) => row.action,
     style: { justifyContent: "center" },
-    width: "180px",
+    width: "220px",
   },
 ];
 
+/**
+ * Row actions.
+ *
+ * Every destination carries the employee's `Employee._id` in the URL, which is
+ * the same identifier the leave / payroll / attendance endpoints scope by. The
+ * employee context header therefore survives a refresh and a pasted link.
+ */
 export const EmployeeButtons = ({ Id, name }) => {
   const navigate = useNavigate();
 
@@ -85,31 +91,13 @@ export const EmployeeButtons = ({ Id, name }) => {
       >
         <LuCalendarDays className="h-4 w-4" aria-hidden="true" />
       </IconAction>
+      <IconAction
+        title="Attendance"
+        tone="neutral"
+        onClick={() => navigate(`/admin-dashboard/employees/attendance/${Id}`)}
+      >
+        <LuCalendarCheck className="h-4 w-4" aria-hidden="true" />
+      </IconAction>
     </RowActions>
   );
-};
-
-/* ------------------------------------------------------------- Data access */
-
-export const fetchDepartments = async () => {
-  try {
-    const { data } = await api.get("/department");
-    if (data.success) return data.departments;
-    return [];
-  } catch (error) {
-    console.error(getErrorMessage(error, "Failed to load construction sites."));
-    return [];
-  }
-};
-
-/** Employees assigned to a site - used to populate the salary form. */
-export const getEmployees = async (id) => {
-  try {
-    const { data } = await api.get(`/employee/department/${id}`);
-    if (data.success) return data.employees;
-    return [];
-  } catch (error) {
-    console.error(getErrorMessage(error, "Failed to load employees."));
-    return [];
-  }
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuUser,
@@ -17,10 +17,9 @@ import {
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import Avatar from "../ui/Avatar";
-import { api, getErrorMessage } from "../../lib/api";
-import { fetchDepartments } from "../../utils/EmployeeHelper";
-import { invalidate } from "../../hooks/useQuery";
-
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { useAddEmployeeMutation } from "../../services/api/endpoints/employeesApi";
+import { getErrorMessage } from "../../lib/api";
 
 const INITIAL = {
   name: "",
@@ -39,19 +38,16 @@ const INITIAL = {
 
 const AddEmployee = () => {
   const navigate = useNavigate();
-  const [departments, setDepartments] = useState([]);
+  // The site picker reads from the shared cache, so opening this form after
+  // creating a site shows the new site without a reload.
+  const { data: departments = [] } = useGetDepartmentsQuery();
+  // Invalidates Employees + Departments + Dashboard, so the list and the admin
+  // counts are current by the time this page navigates away.
+  const [addEmployee, { isLoading: submitting }] = useAddEmployeeMutation();
+
   const [formData, setFormData] = useState(INITIAL);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const loadDepartments = useCallback(async () => {
-    setDepartments(await fetchDepartments());
-  }, []);
-
-  useEffect(() => {
-    loadDepartments();
-  }, [loadDepartments]);
 
   const handleChange = (event) => {
     const {name, value, files, type, checked} = event.target;
@@ -94,7 +90,6 @@ const AddEmployee = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
 
     try {
@@ -106,20 +101,20 @@ const AddEmployee = () => {
       });
       if (formData.image) payload.append("image", formData.image);
 
-      const { data } = await api.post("/employee/add", payload);
-      if (data.success) {
-        // Refresh the lists and counts this record feeds.
-        invalidate(["employees", "departments", "dashboard-summary"]);
-        navigate("/admin-dashboard/employees");
-      }
+      await addEmployee(payload).unwrap();
+      navigate("/admin-dashboard/employees");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to add the employee."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
-  const preview = formData.image ? URL.createObjectURL(formData.image) : null;
+  // Object URLs must be revoked or the blob stays in memory for the life of
+  // the document; a fresh URL per selected file avoids a stale preview.
+  const preview = useMemo(
+    () => (formData.image ? URL.createObjectURL(formData.image) : null),
+    [formData.image]
+  );
+  useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
 
   return (
     <FormPage

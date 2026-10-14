@@ -9,21 +9,14 @@ import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import Avatar from "../ui/Avatar";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetClientsQuery } from "../../services/api/endpoints/clientsApi";
+import { getErrorMessage, assetUrl } from "../../lib/api";
 import { clientColumns, ClientButtons } from "../../utils/ClientsHelper";
 
 const ClientList = () => {
   const [search, setSearch] = useState("");
 
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["clients"],
-    async () => {
-      const { data: res } = await api.get("/client", { params: { limit: 100 } });
-      return res.success ? res.clients || [] : [];
-    },
-    { staleTime: 15_000, poll: 45_000 }
-  );
+  const { data, error, isLoading, isFetching, refetch } = useGetClientsQuery({ limit: 100 });
 
   const clients = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -37,9 +30,7 @@ const ClientList = () => {
       companyName: client.companyName,
       isActivated: client.userId?.isActivated !== false,
       userIdRef: client.userId?._id,
-      profileImage: client.userId?.profileImage
-        ? `http://localhost:5000/${client.userId.profileImage}`
-        : undefined,
+      profileImage: assetUrl(client.userId?.profileImage),
     }));
 
     if (!term) return list;
@@ -60,7 +51,7 @@ const ClientList = () => {
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Clients" }]}
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/admin-dashboard/add-client" className="w-full sm:w-auto">
@@ -153,7 +144,6 @@ const ClientList = () => {
                   name={client.name}
                   userIdRef={client.userIdRef}
                   isActivated={client.isActivated}
-                  onClientDelete={refetch}
                 />
               }
             />

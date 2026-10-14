@@ -17,8 +17,8 @@ import Button from "../ui/Button";
 import { Card, CardBody, CardHeader } from "../ui/Card";
 import { StatusBadge } from "../ui/Badge";
 import { Alert, CardSkeleton, EmptyState, PermissionDenied } from "../ui/Feedback";
-import { api, getErrorMessage, isPermissionError } from "../../lib/api";
-import { useQuery } from "../../hooks/useQuery";
+import { getErrorMessage, isPermissionError } from "../../lib/api";
+import { useGetDashboardSummaryQuery } from "../../services/api/endpoints/dashboardApi";
 import StatusBreakdown from "./StatusBreakdown";
 import { formatINRCompact } from "../../utils/format";
 
@@ -115,23 +115,15 @@ const ApprovalCard = ({ title, description, viewAllTo, emptyText, items = [], re
 
 const AdminSummary = () => {
   // Counts must reflect approvals without the admin refreshing by hand.
-  // Invalidated by any mutation that touches leave, work requests, payroll,
-  // attendance or sites - see useMutation in the action components.
+  // RTK Query owns this: the query polls in the background, and every mutation
+  // in the app that can move a count declares the Dashboard tag.
   const {
     data: summary,
     error,
     isLoading: loading,
-    isRefreshing,
+    isFetching,
     refetch: fetchSummary,
-  } = useQuery(
-    ["dashboard-summary"],
-    async () => {
-      const { data: res } = await api.get("/dashboard/summary");
-      if (!res.success) throw new Error("Unable to load the dashboard summary.");
-      return res;
-    },
-    { staleTime: 10_000, poll: 30_000 }
-  );
+  } = useGetDashboardSummaryQuery();
 
   const exceptions = useMemo(() => {
     const source = summary?.operationalExceptions;
@@ -168,7 +160,7 @@ const AdminSummary = () => {
         description="Live operational summary across your workforce, sites and requests."
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !loading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/admin-dashboard/add-employee" className="w-full sm:w-auto">

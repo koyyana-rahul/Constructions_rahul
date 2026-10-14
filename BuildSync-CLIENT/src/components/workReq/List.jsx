@@ -8,9 +8,9 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { useGetClientWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
+import { getErrorMessage } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "" },
@@ -69,21 +69,19 @@ const columns = [
 /** A client's own work requests. */
 const WorkList = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
   const isClientSelf = user?.role === "client";
   const role = user?.role ?? "client";
 
-  // The admin's decision must appear here without the client reloading.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["work-requests", "mine", id, role],
-    async () => {
-      const { data: res } = await api.get(`/work-request/${id}/${role}`);
-      return res.success ? res.requests || [] : [];
-    },
-    { staleTime: 10_000, poll: 30_000 }
+  // `id` and `role` are part of the cache key, so two clients never share an
+  // entry. For a non-admin the server ignores the id and resolves the owner
+  // from the verified token.
+  const { data, error, isLoading, isFetching, refetch } = useGetClientWorkRequestsQuery(
+    { id, role },
+    { skip: !id }
   );
 
   const requests = useMemo(
@@ -123,7 +121,7 @@ const WorkList = () => {
         ]}
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             {isClientSelf && (

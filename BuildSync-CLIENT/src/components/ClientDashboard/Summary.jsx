@@ -14,36 +14,25 @@ import Button from "../ui/Button";
 import { Card, CardHeader, CardBody } from "../ui/Card";
 import ProgressBar from "../ui/ProgressBar";
 import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
-import { useAuth } from "../../context/AuthContext";
-import { api } from "../../lib/api";
-import { useQuery } from "../../hooks/useQuery";
+import { getErrorMessage } from "../../lib/api";
+import { useGetWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
+import { useCurrentUser } from "../../features/auth/useSession";
 
 const ClientSummary = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
 
-  // The admin approving a request must show up here without a reload.
+  // The server already scopes this endpoint to the authenticated client (see
+  // clientIdFor() in the work controller), so no client-side filter is
+  // applied. Filtering here on `clientId._id === user._id` would compare a
+  // Client._id against a User._id and never match. The query polls, so an
+  // admin's decision reaches this page without a reload.
   const {
-    data: requests,
+    data: list = [],
     error,
     isLoading: loading,
-    isRefreshing,
+    isFetching: isRefreshing,
     refetch,
-  } = useQuery(
-    ["client-dashboard", user?._id],
-    async () => {
-      const { data: res } = await api.get("/work-request");
-      if (!res.success) return [];
-
-      // The server already scopes this endpoint to the authenticated client
-      // (see clientIdFor() in the work controller), so no client-side filter
-      // is applied. Filtering here on `clientId._id === user._id` would compare
-      // a Client._id against a User._id and never match.
-      return res.requests || [];
-    },
-    { staleTime: 10_000, poll: 25_000 }
-  );
-
-  const list = requests ?? [];
+  } = useGetWorkRequestsQuery();
   const approved = list.filter((r) => r.status === "Approved").length;
   const pending = list.filter((r) => r.status === "Pending").length;
   const rejected = list.filter((r) => r.status === "Rejected").length;
@@ -68,9 +57,11 @@ const ClientSummary = () => {
         }
       />
 
-      <Alert variant="error" className="mb-4 sm:mb-5" onDismiss={() => {}}>
-        {error}
-      </Alert>
+      {error && (
+        <Alert variant="error" className="mb-4 sm:mb-5">
+          {getErrorMessage(error)}
+        </Alert>
+      )}
 
       {loading ? (
         <CardSkeleton count={3} />

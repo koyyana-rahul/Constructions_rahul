@@ -25,7 +25,9 @@ export const createApp = () => {
   app.use(express.static("public/uploads"));
 
   app.get("/api/health", (_req, res) =>
-    res.status(200).json({ success: true, status: "ok", uptime: process.uptime() })
+    res
+      .status(200)
+      .json({ success: true, status: "ok", uptime: process.uptime() }),
   );
 
   app.use("/api/auth", authRouter);

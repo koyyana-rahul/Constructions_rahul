@@ -14,40 +14,45 @@ import Button from "../ui/Button";
 import { Card, CardHeader, CardBody } from "../ui/Card";
 import ProgressBar from "../ui/ProgressBar";
 import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { getErrorMessage } from "../../lib/api";
+import { useGetEmployeeLeavesQuery } from "../../services/api/endpoints/leavesApi";
+import { useGetSalaryQuery } from "../../services/api/endpoints/salaryApi";
+import { useCurrentUser } from "../../features/auth/useSession";
 import { formatINR } from "../../utils/format";
 
 const EmployeeSummary = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
+  const userId = user?._id;
+  const skip = !userId;
 
-  // After applying for leave the counts must update without a manual reload.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["employee-dashboard", user?._id],
-    async () => {
-      if (!user?._id) return { leaves: [], salary: [] };
-      const [leaveRes, salaryRes] = await Promise.allSettled([
-        api.get(`/leave/${user._id}/employee`),
-        api.get(`/salary/${user._id}/employee`),
-      ]);
+  // Two independent reads instead of one hand-rolled "dashboard" request: RTK
+  // Query caches each separately, so applying for leave refreshes only the
+  // leave list and the payroll read is left untouched.
+  const {
+    data: leaveData,
+    error: leaveError,
+    isLoading: leavesLoading,
+    isFetching: leavesFetching,
+    refetch: refetchLeaves,
+  } = useGetEmployeeLeavesQuery({ id: userId, role: "employee" }, { skip });
 
-      const leaves =
-        leaveRes.status === "fulfilled" && leaveRes.value.data.success
-          ? leaveRes.value.data.leaves || []
-          : [];
-      const salary =
-        salaryRes.status === "fulfilled" && salaryRes.value.data.success
-          ? salaryRes.value.data.salary || []
-          : [];
+  const {
+    data: salaryData,
+    error: salaryError,
+    isLoading: salaryLoading,
+    isFetching: salaryFetching,
+    refetch: refetchSalary,
+  } = useGetSalaryQuery({ id: userId, role: "employee" }, { skip });
 
-      return { leaves, salary };
-    },
-    { staleTime: 10_000, poll: 30_000 }
-  );
+  const leaves = leaveData ?? [];
+  const salary = salaryData ?? [];
 
-  const leaves = data?.leaves ?? [];
-  const salary = data?.salary ?? [];
+  const loading = leavesLoading || salaryLoading;
+  const isRefreshing = leavesFetching || salaryFetching;
+  const error = leaveError ?? salaryError;
+  // Either read can be retried on its own; the empty-state button retries the
+  // one that actually failed.
+  const refetch = leaveError ? refetchLeaves : refetchSalary;
 
   const approved = leaves.filter((l) => l.status === "Approved").length;
   const pending = leaves.filter((l) => l.status === "Pending").length;
@@ -79,7 +84,7 @@ const EmployeeSummary = () => {
         </Alert>
       )}
 
-      {isLoading ? (
+      {loading ? (
         <CardSkeleton count={3} />
       ) : (
         <div className="space-y-6">

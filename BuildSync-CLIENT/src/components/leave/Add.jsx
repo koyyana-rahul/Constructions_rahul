@@ -3,15 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { LuCalendarPlus, LuCalendarDays } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Select, Textarea } from "../ui/Form";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
-import { invalidate } from "../../hooks/useQuery";
-
+import { useAddLeaveMutation } from "../../services/api/endpoints/leavesApi";
+import { getErrorMessage } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 
 const LEAVE_TYPES = ["Sick Leave", "Casual Leave", "Annual Leave"];
 
 const AddLeave = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const navigate = useNavigate();
 
   const [leave, setLeave] = useState({
@@ -22,7 +21,10 @@ const AddLeave = () => {
   });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  // Invalidates Leaves + Dashboard, so the history list, the employee
+  // dashboard tiles and the admin queue all update from the server response.
+  const [createLeave, { isLoading: submitting }] = useAddLeaveMutation();
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -50,21 +52,12 @@ const AddLeave = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.post("/leave/add", {
-        ...leave,
-        userId: user._id,
-      });
-      if (data.success) {
-        invalidate(["leaves", "employee-dashboard", "dashboard-summary"]);
-        navigate(`/employee-dashboard/leaves/${user._id}`);
-      }
+      await createLeave({ ...leave, userId: user?._id }).unwrap();
+      navigate(`/employee-dashboard/leaves/${user?._id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to submit your leave request."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

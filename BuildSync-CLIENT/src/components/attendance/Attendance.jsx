@@ -15,8 +15,8 @@ import Toolbar from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetAttendanceQuery } from "../../services/api/endpoints/attendanceApi";
+import { getErrorMessage } from "../../lib/api";
 import { columns, AttendanceHelper } from "../../utils/AttendanceHelper";
 import { formatDate } from "../../utils/tableUtils";
 
@@ -24,15 +24,7 @@ const Attendance = () => {
   const [search, setSearch] = useState("");
   const today = formatDate(new Date());
 
-  // The default-attendance middleware is idempotent, so polling is safe.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["attendance"],
-    async () => {
-      const { data: res } = await api.get("/attendance");
-      return res.success ? res.attendance || [] : [];
-    },
-    { staleTime: 10_000, poll: 30_000 }
-  );
+  const { data, error, isLoading, isFetching, refetch } = useGetAttendanceQuery();
 
   const rows = useMemo(
     () =>
@@ -74,7 +66,7 @@ const Attendance = () => {
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Attendance" }]}
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/admin-dashboard/attendance-report" className="w-full sm:w-auto">
@@ -117,13 +109,9 @@ const Attendance = () => {
           columns={columns}
           data={filtered.map((record) => ({
             ...record,
-            action: (
-              <AttendanceHelper
-                status={record.status}
-                employeeId={record.employeeRef}
-                statusChange={refetch}
-              />
-            ),
+            // The mutation itself invalidates the Attendance + Dashboard tags,
+            // so this list and the tiles above refresh without a manual call.
+            action: <AttendanceHelper status={record.status} employeeId={record.employeeRef} />,
           }))}
           loading={isLoading}
           skeletonRows={10}
@@ -162,11 +150,7 @@ const Attendance = () => {
                 )
               }
               actions={
-                <AttendanceHelper
-                  status={record.status}
-                  employeeId={record.employeeRef}
-                  statusChange={refetch}
-                />
+                <AttendanceHelper status={record.status} employeeId={record.employeeRef} />
               }
             />
           )}

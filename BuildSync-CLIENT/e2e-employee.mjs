@@ -14,7 +14,7 @@ export default async function run(page) {
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await page.waitForURL(/dashboard/, { timeout: 20000 });
 
-  // Grab two real employee ids from the API.
+  // Grab two real employee ids from thSe API.
   const ids = await page.evaluate(async () => {
     const t = localStorage.getItem("token");
     const r = await fetch("http://localhost:5050/api/employee?limit=100", {
@@ -33,13 +33,19 @@ export default async function run(page) {
     page.evaluate(() => {
       const h = document.querySelector("h2");
       const code = Array.from(document.querySelectorAll("p")).find((p) =>
-        /^UI-\d+/i.test(p.textContent.trim())
+        /^UI-\d+/i.test(p.textContent.trim()),
       );
-      const tabs = Array.from(document.querySelectorAll('nav[aria-label="Employee sections"] a'))
+      const tabs = Array.from(
+        document.querySelectorAll('nav[aria-label="Employee sections"] a'),
+      )
         .map((a) => a.textContent.trim())
         .filter(Boolean);
-      const activeTab = document.querySelector('nav[aria-label="Employee sections"] [aria-current="page"]');
-      const crumb = Array.from(document.querySelectorAll("nav[aria-label='Breadcrumb'] li"))
+      const activeTab = document.querySelector(
+        'nav[aria-label="Employee sections"] [aria-current="page"]',
+      );
+      const crumb = Array.from(
+        document.querySelectorAll("nav[aria-label='Breadcrumb'] li"),
+      )
         .map((l) => l.innerText.trim())
         .filter(Boolean);
       return {
@@ -58,7 +64,9 @@ export default async function run(page) {
       ["salary", `/admin-dashboard/employees/salary/${emp.id}`],
       ["attendance", `/admin-dashboard/employees/attendance/${emp.id}`],
     ]) {
-      await page.goto("http://localhost:4173" + path, { waitUntil: "networkidle" });
+      await page.goto("http://localhost:4173" + path, {
+        waitUntil: "networkidle",
+      });
       await page.waitForTimeout(1500);
       const header = await readHeader();
       out.steps.push({
@@ -74,9 +82,12 @@ export default async function run(page) {
   }
 
   // Tab navigation from the profile page must keep the same employee.
-  await page.goto("http://localhost:4173/admin-dashboard/employees/" + ids[0].id, {
-    waitUntil: "networkidle",
-  });
+  await page.goto(
+    "http://localhost:4173/admin-dashboard/employees/" + ids[0].id,
+    {
+      waitUntil: "networkidle",
+    },
+  );
   await page.waitForTimeout(1500);
   await page.click('nav[aria-label="Employee sections"] a:has-text("Salary")');
   await page.waitForTimeout(1600);
@@ -84,17 +95,23 @@ export default async function run(page) {
   out.tabNavHeader = (await readHeader()).name;
 
   // Switching employees must swap the header, not blend the two.
-  await page.goto("http://localhost:4173/admin-dashboard/employees/" + ids[1].id, {
-    waitUntil: "networkidle",
-  });
+  await page.goto(
+    "http://localhost:4173/admin-dashboard/employees/" + ids[1].id,
+    {
+      waitUntil: "networkidle",
+    },
+  );
   await page.waitForTimeout(1600);
   out.switchedTo = (await readHeader()).name;
   out.switchedIsEmployeeB = (await readHeader()).name === ids[1].name;
 
   // Invalid id must degrade gracefully, never crash.
-  await page.goto("http://localhost:4173/admin-dashboard/employees/000000000000000000000000", {
-    waitUntil: "networkidle",
-  });
+  await page.goto(
+    "http://localhost:4173/admin-dashboard/employees/000000000000000000000000",
+    {
+      waitUntil: "networkidle",
+    },
+  );
   await page.waitForTimeout(1500);
   out.invalidIdText = await page
     .locator('[role="alert"], [role="status"]')

@@ -5,41 +5,51 @@ import AuthLayout from "../components/layout/AuthLayout";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Form";
 import { Alert } from "../components/ui/Feedback";
-import { api, getErrorMessage } from "../lib/api";
-import { useAuth } from "../context/AuthContext";
+import { getErrorMessage } from "../lib/api";
+import { useLoginMutation } from "../services/api/endpoints/authApi";
+import { homePathForRole } from "../features/auth/authSelectors";
 
+/**
+ * Sign-in.
+ *
+ * The mutation's `onQueryStarted` stores the JWT and writes the auth slice
+ * BEFORE `unwrap()` resolves, so by the time this component navigates the
+ * route guard already sees an authenticated user and lets the redirect through.
+ * Navigating first would bounce straight back to /login.
+ */
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [login, { isLoading }] = useLoginMutation();
+
   const justActivated = location.state?.activated;
+  // Set by PrivateRoutes when an anonymous visitor opens a protected deep link.
+  const redirectTo = location.state?.from;
+  const allowed = location.state?.allowed;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
-    setLoading(true);
 
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const { user } = await login({ email, password }).unwrap();
 
-      if (data.success) {
-        login(data.user);
-        localStorage.setItem("token", data.token);
-
-        if (data.user.role === "admin") navigate("/admin-dashboard");
-        else if (data.user.role === "client") navigate("/client-dashboard");
-        else navigate("/employee-dashboard");
+      // Honour the originally requested page only when the signed-in role is
+      // actually allowed there - the guard would otherwise bounce them to
+      // their dashboard anyway, losing the intended destination.
+      if (redirectTo && allowed?.includes(user.role)) {
+        navigate(redirectTo, { replace: true });
+      } else {
+        navigate(homePathForRole(user.role), { replace: true });
       }
     } catch (err) {
       setError(getErrorMessage(err, "Unable to sign in. Please try again."));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -69,9 +79,11 @@ const Login = () => {
         </div>
       )}
 
-      <Alert variant="error" className="mb-5" onDismiss={() => setError(null)}>
-        {error}
-      </Alert>
+      {error && (
+        <Alert variant="error" className="mb-5" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <Input
@@ -81,7 +93,10 @@ const Login = () => {
           autoComplete="email"
           placeholder="you@company.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setError(null);
+          }}
           required
           icon={<LuMail className="h-4 w-4" />}
         />
@@ -93,7 +108,10 @@ const Login = () => {
           autoComplete="current-password"
           placeholder="Enter your password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setError(null);
+          }}
           required
           trailing={
             <button
@@ -132,11 +150,11 @@ const Login = () => {
           type="submit"
           variant="accent"
           size="lg"
-          loading={loading}
+          loading={isLoading}
           className="w-full"
         >
-          {!loading && <LuLogIn className="h-4 w-4" aria-hidden="true" />}
-          {loading ? "Signing in" : "Sign in"}
+          {!isLoading && <LuLogIn className="h-4 w-4" aria-hidden="true" />}
+          {isLoading ? "Signing in" : "Sign in"}
         </Button>
       </form>
 

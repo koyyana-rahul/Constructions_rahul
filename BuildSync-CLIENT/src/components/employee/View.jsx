@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   LuHardHat,
@@ -17,9 +16,10 @@ import Avatar from "../ui/Avatar";
 import EmployeeContextHeader from "./EmployeeContextHeader";
 import { StatusBadge } from "../ui/Badge";
 import { Alert, PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import { assetUrl, getErrorMessage } from "../../lib/api";
+import { useGetEmployeeQuery } from "../../services/api/endpoints/employeesApi";
+import { useCurrentUser } from "../../features/auth/useSession";
 import { formatDate } from "../../utils/tableUtils";
-import { useAuth } from "../../context/AuthContext";
 
 /**
  * Employee profile. Serves the admin route (`/admin-dashboard/employees/:id`)
@@ -29,33 +29,13 @@ import { useAuth } from "../../context/AuthContext";
  */
 const View = () => {
   const { id } = useParams();
-  const { user } = useAuth();
-  const [employee, setEmployee] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const user = useCurrentUser();
+
+  const { data: employee, isLoading: loading, error } = useGetEmployeeQuery(id, {
+    skip: !id,
+  });
 
   const isSelf = user?.role === "employee" && user?._id === id;
-
-  const fetchEmployee = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get(`/employee/${id}`);
-      if (data.success && data.employee) {
-        setEmployee(data.employee);
-      } else {
-        setError("Employee record not found.");
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the employee profile."));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchEmployee();
-  }, [fetchEmployee]);
 
   if (loading) return <PageLoader label="Loading employee profile" />;
 
@@ -63,15 +43,17 @@ const View = () => {
     return (
       <>
         <PageHeader title="Employee Profile" />
-        <Alert variant="error">{error || "Employee record not found."}</Alert>
+        <Alert variant="error">
+          {getErrorMessage(error, "Employee record not found.")}
+        </Alert>
       </>
     );
   }
 
   const { userId = {}, department = {} } = employee;
-  const avatar = userId.profileImage
-    ? `http://localhost:5000/${userId.profileImage}`
-    : undefined;
+  // Derived from VITE_API_URL rather than a hardcoded origin, so a non-default
+  // port or a deployed environment needs no code change.
+  const avatar = assetUrl(userId.profileImage);
 
   return (
     <>

@@ -7,8 +7,8 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
+import { getErrorMessage } from "../../lib/api";
 import { columns, WorkRequestButtons } from "../../utils/WorkRequestHelper";
 
 const STATUS_OPTIONS = [
@@ -22,15 +22,11 @@ const WorkTable = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
-  // A client submitting a request must show up here without a manual refresh.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["work-requests"],
-    async () => {
-      const { data: res } = await api.get("/work-request", { params: { limit: 100 } });
-      return res.success ? res.requests || [] : [];
-    },
-    { staleTime: 10_000, poll: 25_000 }
-  );
+  // A client submitting a request must reach this queue without a manual
+  // refresh: the query polls, and addWorkRequest invalidates the tag.
+  const { data, error, isLoading, isFetching, refetch } = useGetWorkRequestsQuery({
+    limit: 100,
+  });
 
   const requests = useMemo(
     () =>
@@ -81,7 +77,8 @@ const WorkTable = () => {
         description="Requests raised by clients, with scope, dates and supporting documents."
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Work Requests" }]}
         actions={
-          isRefreshing && (
+          isFetching &&
+          !isLoading && (
             <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
           )
         }

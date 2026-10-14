@@ -4,61 +4,53 @@ import { LuUser, LuHeartHandshake, LuBriefcase, LuBuilding2, LuBanknote } from "
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import { PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { fetchDepartments } from "../../utils/EmployeeHelper";
+import {
+  useGetEmployeeQuery,
+  useUpdateEmployeeMutation,
+} from "../../services/api/endpoints/employeesApi";
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../../lib/api";
+
+const EMPTY = {
+  name: "",
+  maritalStatus: "",
+  designation: "",
+  salary: "",
+  department: "",
+};
 
 const EditEmployee = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [departments, setDepartments] = useState([]);
-  const [employee, setEmployee] = useState({
-    name: "",
-    maritalStatus: "",
-    designation: "",
-    salary: "",
-    department: "",
-  });
+  const { data: departments = [] } = useGetDepartmentsQuery();
+  const { data: record, isLoading: loading } = useGetEmployeeQuery(id, { skip: !id });
+  const [updateEmployee, { isLoading: submitting }] = useUpdateEmployeeMutation();
+
+  const [employee, setEmployee] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
+  // Seeded once: the admin can keep editing while a background refetch runs,
+  // and a fresh server value never overwrites half-typed input.
   useEffect(() => {
-    fetchDepartments().then(setDepartments);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data } = await api.get(`/employee/${id}`);
-        if (data.success && data.employee) {
-          const record = data.employee;
-          setEmployee({
-            name: record.userId?.name || "",
-            maritalStatus: record.maritalStatus || "",
-            designation: record.designation || "",
-            salary: record.salary ?? "",
-            // `department` comes back populated as an object; the update
-            // endpoint expects the raw id.
-            department:
-              typeof record.department === "object" && record.department !== null
-                ? record.department._id
-                : record.department || "",
-          });
-        } else {
-          setError("Employee record not found.");
-        }
-      } catch (err) {
-        setError(getErrorMessage(err, "Unable to load the employee record."));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [id]);
+    if (record && !seeded) {
+      setEmployee({
+        name: record.userId?.name || "",
+        maritalStatus: record.maritalStatus || "",
+        designation: record.designation || "",
+        salary: record.salary ?? "",
+        // `department` comes back populated as an object; the update endpoint
+        // expects the raw id.
+        department:
+          typeof record.department === "object" && record.department !== null
+            ? record.department._id
+            : record.department || "",
+      });
+      setSeeded(true);
+    }
+  }, [record, seeded]);
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -81,15 +73,12 @@ const EditEmployee = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.put(`/employee/${id}`, employee);
-      if (data.success) navigate(`/admin-dashboard/employees/${id}`);
+      await updateEmployee({ id, ...employee }).unwrap();
+      navigate(`/admin-dashboard/employees/${id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update the employee."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
