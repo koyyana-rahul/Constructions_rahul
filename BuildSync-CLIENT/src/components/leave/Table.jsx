@@ -7,8 +7,8 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetLeavesQuery } from "../../services/api/endpoints/leavesApi";
+import { getErrorMessage } from "../../lib/api";
 import { columns, LeaveButtons } from "../../utils/LeaveHelper";
 
 const STATUS_OPTIONS = [
@@ -22,15 +22,9 @@ const LeaveTable = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
-  // Approvals by another admin must appear without a manual refresh.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["leaves"],
-    async () => {
-      const { data: res } = await api.get("/leave", { params: { limit: 100 } });
-      return res.success ? res.leaves || [] : [];
-    },
-    { staleTime: 10_000, poll: 30_000 }
-  );
+  // Approvals by another admin must appear without a manual refresh: the query
+  // polls in the background, and every leave mutation invalidates the tag.
+  const { data, error, isLoading, isFetching, refetch } = useGetLeavesQuery({ limit: 100 });
 
   const leaves = useMemo(() => {
     const list = (data ?? []).map((leave, index) => ({
@@ -81,7 +75,8 @@ const LeaveTable = () => {
         description="Review and action leave applications across your workforce."
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Leave Requests" }]}
         actions={
-          isRefreshing && (
+          isFetching &&
+          !isLoading && (
             <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
           )
         }

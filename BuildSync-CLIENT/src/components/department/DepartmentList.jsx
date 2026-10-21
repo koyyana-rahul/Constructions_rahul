@@ -8,22 +8,17 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../../lib/api";
 import { columns, DepartmentButtons } from "../../utils/DepartmentHelper";
 
 const DepartmentList = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["departments"],
-    async () => {
-      const { data: res } = await api.get("/department", { params: { includeArchived: true } });
-      return res.success ? res.departments || [] : [];
-    },
-    { staleTime: 30_000, poll: 60_000 }
-  );
+  const { data, error, isLoading, isFetching, refetch } = useGetDepartmentsQuery({
+    includeArchived: true,
+  });
 
   const departments = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -64,7 +59,7 @@ const DepartmentList = () => {
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Construction Sites" }]}
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/admin-dashboard/add-department" className="w-full sm:w-auto">
@@ -148,12 +143,7 @@ const DepartmentList = () => {
               subtitle={dep.description || "No description"}
               status={<StatusBadge status={dep.isArchived ? "Archived" : "Active"} />}
               actions={
-                <DepartmentButtons
-                  Id={dep._id}
-                  name={dep.dep_name}
-                  isArchived={dep.isArchived}
-                  onDepartmentDelete={refetch}
-                />
+                <DepartmentButtons Id={dep._id} name={dep.dep_name} isArchived={dep.isArchived} />
               }
             />
           )}

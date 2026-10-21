@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuUser,
@@ -17,10 +17,9 @@ import {
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import Avatar from "../ui/Avatar";
-import { api, getErrorMessage } from "../../lib/api";
-import { fetchDepartments } from "../../utils/EmployeeHelper";
-import { invalidate } from "../../hooks/useQuery";
-
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { useAddEmployeeMutation } from "../../services/api/endpoints/employeesApi";
+import { getErrorMessage } from "../../lib/api";
 
 const INITIAL = {
   name: "",
@@ -39,19 +38,17 @@ const INITIAL = {
 
 const AddEmployee = () => {
   const navigate = useNavigate();
-  const [departments, setDepartments] = useState([]);
   const [formData, setFormData] = useState(INITIAL);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  const loadDepartments = useCallback(async () => {
-    setDepartments(await fetchDepartments());
-  }, []);
+  // The site list comes from the server, which already excludes archived
+  // sites - so a new hire can never be assigned to a closed site.
+  const { data: departments = [], isLoading: loadingSites } = useGetDepartmentsQuery();
 
-  useEffect(() => {
-    loadDepartments();
-  }, [loadDepartments]);
+  // The mutation invalidates Employees + Departments + Dashboard, so the
+  // employee list, the site pickers and the dashboard counts all refresh.
+  const [createEmployee, { isLoading: submitting }] = useAddEmployeeMutation();
 
   const handleChange = (event) => {
     const {name, value, files, type, checked} = event.target;
@@ -94,7 +91,6 @@ const AddEmployee = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
 
     try {
@@ -106,16 +102,10 @@ const AddEmployee = () => {
       });
       if (formData.image) payload.append("image", formData.image);
 
-      const { data } = await api.post("/employee/add", payload);
-      if (data.success) {
-        // Refresh the lists and counts this record feeds.
-        invalidate(["employees", "departments", "dashboard-summary"]);
-        navigate("/admin-dashboard/employees");
-      }
+      await createEmployee(payload).unwrap();
+      navigate("/admin-dashboard/employees");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to add the employee."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -257,9 +247,15 @@ const AddEmployee = () => {
         onChange={handleChange}
         error={errors.department}
         required
+        disabled={loadingSites}
+        hint={
+          loadingSites
+            ? "Loading sites…"
+            : "Archived sites are not listed - a new hire cannot join a closed site."
+        }
         icon={<LuBuilding2 className="h-4 w-4" />}
       >
-        <option value="">Select a site</option>
+        <option value="">{loadingSites ? "Loading sites…" : "Select a site"}</option>
         {departments.map((dep) => (
           <option key={dep._id} value={dep._id}>
             {dep.dep_name}

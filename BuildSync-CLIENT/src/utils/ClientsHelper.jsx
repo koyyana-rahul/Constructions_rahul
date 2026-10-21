@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuEye, LuPencil, LuTrash2, LuSend } from "react-icons/lu";
-import { api, getErrorMessage } from "../lib/api";
 import { IconAction, RowActions } from "./tableUtils";
 import Avatar from "../components/ui/Avatar";
 import ConfirmDialog, { useConfirm } from "../components/ui/ConfirmDialog";
 import { StatusBadge } from "../components/ui/Badge";
+import { useDeleteClientMutation } from "../services/api/endpoints/clientsApi";
+import { useResendInvitationMutation } from "../services/api/endpoints/authApi";
+import { getErrorMessage } from "../lib/api";
 
 export const clientColumns = [
   {
@@ -70,21 +72,21 @@ export const clientColumns = [
   },
 ];
 
-export const ClientButtons = ({ Id, name, userIdRef, isActivated, onClientDelete }) => {
+export const ClientButtons = ({ Id, name, userIdRef, isActivated }) => {
   const navigate = useNavigate();
   const [error, setError] = useState(null);
   const [link, setLink] = useState(null);
   const confirm = useConfirm();
 
+  const [deleteClient, deleteState] = useDeleteClientMutation();
+  const [resendInvitation, resendState] = useResendInvitationMutation();
+
   const handleDelete = async () => {
     confirm.setLoading(true);
     setError(null);
     try {
-      const { data } = await api.delete(`/client/${Id}`);
-      if (data.success) {
-        confirm.close();
-        onClientDelete();
-      }
+      await deleteClient(Id).unwrap();
+      confirm.close();
     } catch (err) {
       confirm.close();
       setError(getErrorMessage(err, "Could not delete the client."));
@@ -96,9 +98,10 @@ export const ClientButtons = ({ Id, name, userIdRef, isActivated, onClientDelete
   // Invited accounts that never activated need a fresh one-time link.
   const handleResend = async () => {
     setError(null);
+    setLink(null);
     try {
-      const { data } = await api.post(`/auth/invitations/${userIdRef}/resend`);
-      setLink(data.activationToken);
+      const result = await resendInvitation(userIdRef).unwrap();
+      setLink(result.activationToken);
     } catch (err) {
       setError(getErrorMessage(err, "Could not issue a new invitation."));
     }
@@ -122,7 +125,7 @@ export const ClientButtons = ({ Id, name, userIdRef, isActivated, onClientDelete
               title="Resend invitation"
               tone="accent"
               onClick={handleResend}
-              disabled={!userIdRef}
+              disabled={!userIdRef || resendState.isLoading}
             >
               <LuSend className="h-4 w-4" aria-hidden="true" />
             </IconAction>
@@ -131,7 +134,7 @@ export const ClientButtons = ({ Id, name, userIdRef, isActivated, onClientDelete
             title="Delete client"
             tone="danger"
             onClick={() => confirm.open(Id)}
-            disabled={confirm.loading}
+            disabled={deleteState.isLoading}
           >
             <LuTrash2 className="h-4 w-4" aria-hidden="true" />
           </IconAction>

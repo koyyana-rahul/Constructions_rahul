@@ -4,14 +4,17 @@ import { LuUser, LuHeartHandshake, LuBriefcase, LuBuilding2, LuBanknote } from "
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import { PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { fetchDepartments } from "../../utils/EmployeeHelper";
+import {
+  useGetEmployeeQuery,
+  useUpdateEmployeeMutation,
+} from "../../services/api/endpoints/employeesApi";
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../../lib/api";
 
 const EditEmployee = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [departments, setDepartments] = useState([]);
   const [employee, setEmployee] = useState({
     name: "",
     maritalStatus: "",
@@ -21,47 +24,40 @@ const EditEmployee = () => {
   });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
 
+  // The site list comes from the server and already excludes archived sites.
+  const { data: departments = [], isLoading: loadingSites } = useGetDepartmentsQuery();
+
+  const {
+    data: record,
+    error: loadError,
+    isLoading: loading,
+  } = useGetEmployeeQuery(id, { skip: !id });
+
+  const [updateEmployee, { isLoading: submitting }] = useUpdateEmployeeMutation();
+
+  /**
+   * Seed the form once the record arrives.
+   *
+   * `department` comes back populated as an object; the update endpoint
+   * expects the raw id.
+   */
   useEffect(() => {
-    fetchDepartments().then(setDepartments);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data } = await api.get(`/employee/${id}`);
-        if (data.success && data.employee) {
-          const record = data.employee;
-          setEmployee({
-            name: record.userId?.name || "",
-            maritalStatus: record.maritalStatus || "",
-            designation: record.designation || "",
-            salary: record.salary ?? "",
-            // `department` comes back populated as an object; the update
-            // endpoint expects the raw id.
-            department:
-              typeof record.department === "object" && record.department !== null
-                ? record.department._id
-                : record.department || "",
-          });
-        } else {
-          setError("Employee record not found.");
-        }
-      } catch (err) {
-        setError(getErrorMessage(err, "Unable to load the employee record."));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [id]);
+    if (!record) return;
+    setEmployee({
+      name: record.userId?.name || "",
+      maritalStatus: record.maritalStatus || "",
+      designation: record.designation || "",
+      salary: record.salary ?? "",
+      department:
+        typeof record.department === "object" && record.department !== null
+          ? record.department._id
+          : record.department || "",
+    });
+  }, [record]);
 
   const handleChange = (event) => {
-    const {name, value} = event.target;
+    const { name, value } = event.target;
     setEmployee((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
     setError(null);
@@ -81,15 +77,12 @@ const EditEmployee = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.put(`/employee/${id}`, employee);
-      if (data.success) navigate(`/admin-dashboard/employees/${id}`);
+      await updateEmployee({ id, ...employee }).unwrap();
+      navigate(`/admin-dashboard/employees/${id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update the employee."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -106,7 +99,7 @@ const EditEmployee = () => {
       backTo="/admin-dashboard/employees"
       submitLabel="Save changes"
       submitting={submitting}
-      error={error}
+      error={error || (loadError ? getErrorMessage(loadError) : null)}
       onSubmit={handleSubmit}
       onCancel={() => navigate("/admin-dashboard/employees")}
     >
@@ -147,9 +140,10 @@ const EditEmployee = () => {
         onChange={handleChange}
         error={errors.department}
         required
+        disabled={loadingSites}
         icon={<LuBuilding2 className="h-4 w-4" />}
       >
-        <option value="">Select a site</option>
+        <option value="">{loadingSites ? "Loading sites…" : "Select a site"}</option>
         {departments.map((dep) => (
           <option key={dep._id} value={dep._id}>
             {dep.dep_name}

@@ -4,48 +4,38 @@ import { LuUser, LuMail, LuPhone, LuBuilding2 } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import { PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import {
+  useGetClientQuery,
+  useUpdateClientMutation,
+} from "../../services/api/endpoints/clientsApi";
+import { getErrorMessage } from "../../lib/api";
+
+const EMPTY = { name: "", email: "", phone: "", entityType: "" };
 
 const EditClient = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [client, setClient] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    entityType: "",
-  });
+  const { data: record, isLoading: loading } = useGetClientQuery(id, { skip: !id });
+  const [updateClient, { isLoading: submitting }] = useUpdateClientMutation();
+
+  // Seeded once: a background refetch must not overwrite in-progress edits.
+  const [client, setClient] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data } = await api.get(`/client/${id}`);
-        if (data.success && data.client) {
-          const record = data.client;
-          setClient({
-            name: record.userId?.name || "",
-            email: record.userId?.email || "",
-            phone: record.phone || "",
-            entityType: record.entityType || "",
-          });
-        } else {
-          setError("Client record not found.");
-        }
-      } catch (err) {
-        setError(getErrorMessage(err, "Unable to load the client record."));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [id]);
+    if (record && !seeded) {
+      setClient({
+        name: record.userId?.name || "",
+        email: record.userId?.email || "",
+        phone: record.phone || "",
+        entityType: record.entityType || "",
+      });
+      setSeeded(true);
+    }
+  }, [record, seeded]);
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -69,15 +59,12 @@ const EditClient = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.put(`/client/${id}`, client);
-      if (data.success) navigate(`/admin-dashboard/clients/${id}`);
+      await updateClient({ id, ...client }).unwrap();
+      navigate(`/admin-dashboard/clients/${id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update the client."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

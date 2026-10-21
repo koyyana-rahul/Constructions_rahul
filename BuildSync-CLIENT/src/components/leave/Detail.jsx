@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   LuCheckCircle2,
@@ -15,57 +15,37 @@ import Avatar from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import ConfirmDialog, { useConfirm } from "../ui/ConfirmDialog";
 import { Alert, PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { useMutation } from "../../hooks/useQuery";
+import {
+  useGetLeaveByIdQuery,
+  useUpdateLeaveStatusMutation,
+} from "../../services/api/endpoints/leavesApi";
+import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
 
 const LeaveDetail = () => {
   const { id } = useParams();
 
-  const [leave, setLeave] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [error, setError] = useState(null);
   const confirm = useConfirm();
 
-  const fetchLeave = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get(`/leave/detail/${id}`);
-      if (data.success) setLeave(data.leave);
-      else setError("Leave request not found.");
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the leave request."));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const {
+    data: leave,
+    isLoading: loading,
+    error: loadError,
+  } = useGetLeaveByIdQuery(id, { skip: !id });
 
-  useEffect(() => {
-    fetchLeave();
-  }, [fetchLeave]);
-
-  // Refreshing the detail plus every dependent list and count means the
-  // employee sees the new status without a manual reload.
-  const { mutate: decide } = useMutation(
-    async (status) => {
-      const { data } = await api.put(`/leave/${id}`, { status });
-      if (!data.success) throw new Error("Unable to update the leave request.");
-      return data;
-    },
-    { invalidate: ["leaves", "employee-dashboard", "dashboard-summary"] }
-  );
+  // The mutation invalidates the record, the admin queue, the employee's own
+  // history and the dashboard, so nothing is left showing a stale status.
+  const [decide, { isPending }] = useUpdateLeaveStatusMutation();
 
   const changeStatus = async (status) => {
     confirm.setLoading(true);
     setError(null);
     try {
-      await decide(status);
+      await decide({ id, status }).unwrap();
       confirm.close();
       setNotice(`Leave request ${status.toLowerCase()}.`);
-      const fresh = await api.get(`/leave/detail/${id}`);
-      if (fresh.data?.success) setLeave(fresh.data.leave);
     } catch (err) {
       confirm.close();
       setError(getErrorMessage(err, "Unable to update the leave request."));
@@ -79,18 +59,23 @@ const LeaveDetail = () => {
   // Guard on `!leave`, not on `error` - otherwise a success response with no
   // body falls through to `leave.employeeId` and crashes the page.
   if (!leave) {
+    const forbidden = isPermissionError(loadError);
     return (
       <>
         <PageHeader title="Leave Request" />
-        <Alert variant="error">{error || "Leave request not found."}</Alert>
+        <Alert variant="error">
+          {forbidden
+            ? "You do not have permission to view this leave request."
+            : loadError
+            ? getErrorMessage(loadError, "Unable to load the leave request.")
+            : "Leave request not found."}
+        </Alert>
       </>
     );
   }
 
   const employee = leave.employeeId || {};
-  const profileImage = employee.userId?.profileImage
-    ? `http://localhost:5000/${employee.userId.profileImage}`
-    : undefined;
+  const profileImage = assetUrl(employee.userId?.profileImage);
   const days =
     Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) || 0;
 
@@ -119,6 +104,7 @@ const LeaveDetail = () => {
                   variant="outline"
                   size="sm"
                   className="border-danger-500 text-danger-600 hover:bg-danger-50"
+                  disabled={isPending}
                   onClick={() => confirm.open("Rejected")}
                 >
                   <LuXCircle className="h-4 w-4" aria-hidden="true" />
@@ -127,6 +113,7 @@ const LeaveDetail = () => {
                 <Button
                   variant="accent"
                   size="sm"
+                  disabled={isPending}
                   onClick={() => confirm.open("Approved")}
                 >
                   <LuCheckCircle2 className="h-4 w-4" aria-hidden="true" />

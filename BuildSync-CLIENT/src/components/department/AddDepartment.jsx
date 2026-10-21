@@ -3,15 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { LuBuilding2 } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Textarea } from "../ui/Form";
-import { api, getErrorMessage } from "../../lib/api";
-import { invalidate } from "../../hooks/useQuery";
+import { useAddDepartmentMutation } from "../../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../../lib/api";
 
 const AddDepartment = () => {
   const navigate = useNavigate();
   const [department, setDepartment] = useState({ dep_name: "", description: "" });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  // The mutation invalidates Departments + Dashboard, so the site list and the
+  // admin counts are current the moment the page navigates away.
+  const [createDepartment, { isLoading: submitting }] = useAddDepartmentMutation();
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -33,18 +36,12 @@ const AddDepartment = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.post("/department/add", department);
-      if (data.success) {
-        invalidate(["departments", "dashboard-summary"]);
-        navigate("/admin-dashboard/departments");
-      }
+      await createDepartment(department).unwrap();
+      navigate("/admin-dashboard/departments");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to create the site."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

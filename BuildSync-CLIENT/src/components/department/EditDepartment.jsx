@@ -4,45 +4,38 @@ import { LuBuilding2 } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Textarea } from "../ui/Form";
 import { PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import {
+  useGetDepartmentQuery,
+  useUpdateDepartmentMutation,
+} from "../../services/api/endpoints/departmentsApi";
+import { getErrorMessage } from "../../lib/api";
+
+const EMPTY = { dep_name: "", description: "" };
 
 const EditDepartment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // The previous version initialised this to `[]`, so the first render read
-  // `department.dep_name` off an array and rendered blank until data arrived.
-  const [department, setDepartment] = useState({
-    dep_name: "",
-    description: "",
-  });
+  const { data: site, isLoading: loading } = useGetDepartmentQuery(id, { skip: !id });
+  const [updateDepartment, { isLoading: submitting }] = useUpdateDepartmentMutation();
+
+  // Local copy seeded from the cached record: the admin can edit even while a
+  // background refetch is in flight, and a fresh server value does not wipe
+  // half-typed input.
+  const [department, setDepartment] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data } = await api.get(`/department/${id}`);
-        if (data.success && data.department) {
-          setDepartment({
-            dep_name: data.department.dep_name || "",
-            description: data.department.description || "",
-          });
-        } else {
-          setError("Construction site not found.");
-        }
-      } catch (err) {
-        setError(getErrorMessage(err, "Unable to load the construction site."));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [id]);
+    if (site && !seeded) {
+      setDepartment({
+        dep_name: site.dep_name || "",
+        description: site.description || "",
+      });
+      setSeeded(true);
+    }
+  }, [site, seeded]);
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -64,15 +57,12 @@ const EditDepartment = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.put(`/department/${id}`, department);
-      if (data.success) navigate("/admin-dashboard/departments");
+      await updateDepartment({ id, ...department }).unwrap();
+      navigate("/admin-dashboard/departments");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update the site."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

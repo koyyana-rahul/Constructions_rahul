@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuBuilding2,
@@ -11,49 +11,46 @@ import {
 } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
-import { api, getErrorMessage } from "../../lib/api";
-import { fetchDepartments, getEmployees } from "../../utils/EmployeeHelper";
-import { invalidate } from "../../hooks/useQuery";
+import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
+import { useGetEmployeesByDepartmentQuery } from "../../services/api/endpoints/employeesApi";
+import { useAddSalaryMutation } from "../../services/api/endpoints/salaryApi";
+import { getErrorMessage } from "../../lib/api";
 import { formatINR } from "../../utils/format";
+
+const EMPTY = {
+  department: "",
+  employeeId: "",
+  basicSalary: "",
+  allowances: "",
+  deductions: "",
+  payDate: "",
+};
 
 const AddSalary = () => {
   const navigate = useNavigate();
 
-  const [departments, setDepartments] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [salary, setSalary] = useState({
-    department: "",
-    employeeId: "",
-    basicSalary: "",
-    allowances: "",
-    deductions: "",
-    payDate: "",
-  });
+  const [salary, setSalary] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
-  useEffect(() => {
-    fetchDepartments().then(setDepartments);
-  }, []);
-
-  const loadEmployees = useCallback(async (departmentId) => {
-    if (!departmentId) {
-      setEmployees([]);
-      return;
-    }
-    setLoadingEmployees(true);
-    setEmployees(await getEmployees(departmentId));
-    setLoadingEmployees(false);
-  }, []);
+  // Both pickers are RTK Query reads: switching site swaps the employee list,
+  // and the previous site's employees can never be submitted.
+  const { data: departments = [], isFetching: loadingDepartments } =
+    useGetDepartmentsQuery();
+  const { data: employees = [], isFetching: loadingEmployees } =
+    useGetEmployeesByDepartmentQuery(salary.department, { skip: !salary.department });
+  const [addSalary, { isLoading: submitting }] = useAddSalaryMutation();
 
   const handleChange = (event) => {
-    const {name, value} = event.target;
-    setSalary((prev) => ({ ...prev, [name]: value, ...(name === "department" ? { employeeId: "" } : {}) }));
+    const { name, value } = event.target;
+    setSalary((prev) => ({
+      ...prev,
+      [name]: value,
+      // Changing site must clear the employee: that id belongs to the old site.
+      ...(name === "department" ? { employeeId: "" } : {}),
+    }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
     setError(null);
-    if (name === "department") loadEmployees(value);
   };
 
   const net = useMemo(() => {
@@ -84,18 +81,12 @@ const AddSalary = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
-      const { data } = await api.post("/salary/add", salary);
-      if (data.success) {
-        invalidate(["salary", "dashboard-summary"]);
-        navigate("/admin-dashboard/employees");
-      }
+      await addSalary(salary).unwrap();
+      navigate("/admin-dashboard/employees");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to process payroll."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -146,6 +137,8 @@ const AddSalary = () => {
             ? "Select a construction site first."
             : loadingEmployees
             ? "Loading employees…"
+            : loadingDepartments
+            ? "Loading sites…"
             : undefined
         }
         icon={<LuHardHat className="h-4 w-4" />}

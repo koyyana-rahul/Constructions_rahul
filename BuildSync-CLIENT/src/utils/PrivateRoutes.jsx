@@ -1,13 +1,7 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAppSelector } from "../app/hooks";
+import { selectCurrentUser, selectHomePath, selectAuthStatus } from "../features/auth/authSelectors";
 import { PageLoader } from "../components/ui/Feedback";
-
-/** The dashboard a given role is actually allowed into. */
-const HOME_FOR_ROLE = {
-  admin: "/admin-dashboard",
-  employee: "/employee-dashboard",
-  client: "/client-dashboard",
-};
 
 /**
  * Single route guard: authentication + role authorization.
@@ -17,16 +11,33 @@ const HOME_FOR_ROLE = {
  * and must render `<Outlet/>` itself - nesting it as `<PrivateRoutes>
  * <RoleBaseRoutes/></PrivateRoutes>` silently discards the inner guard,
  * because the outer component never renders its `children`.
+ *
+ * Three states are handled explicitly:
+ *   - "unknown"     the stored token has not been verified yet. Render a
+ *                   loader. Redirecting here would send a signed-in user who
+ *                   opened a deep link or refreshed the page to /login.
+ *   - no user       redirect to /login, remembering where they were going so a
+ *                   successful sign-in can return them there.
+ *   - wrong role    redirect to that role's own dashboard - never back to the
+ *                   page they were denied, which would loop.
+ *
+ * This improves UX only. Every endpoint behind these routes enforces the same
+ * permissions server-side.
  */
 const PrivateRoutes = ({ allowed }) => {
-  const { user, loading } = useAuth();
+  const user = useAppSelector(selectCurrentUser);
+  const status = useAppSelector(selectAuthStatus);
+  const homePath = useAppSelector(selectHomePath);
+  const location = useLocation();
 
-  if (loading) return <PageLoader label="Checking your session" />;
+  if (status === "unknown") return <PageLoader label="Checking your session" />;
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
 
   if (Array.isArray(allowed) && !allowed.includes(user.role)) {
-    return <Navigate to={HOME_FOR_ROLE[user.role] || "/login"} replace />;
+    return <Navigate to={homePath} replace />;
   }
 
   return <Outlet />;

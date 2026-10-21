@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   LuHardHat,
@@ -17,9 +16,11 @@ import Avatar from "../ui/Avatar";
 import EmployeeContextHeader from "./EmployeeContextHeader";
 import { StatusBadge } from "../ui/Badge";
 import { Alert, PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetEmployeeQuery } from "../../services/api/endpoints/employeesApi";
+import { useCurrentUser } from "../../features/auth/useSession";
+import { getErrorMessage, assetUrl } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
-import { useAuth } from "../../context/AuthContext";
+import { formatINR } from "../../utils/format";
 
 /**
  * Employee profile. Serves the admin route (`/admin-dashboard/employees/:id`)
@@ -29,33 +30,26 @@ import { useAuth } from "../../context/AuthContext";
  */
 const View = () => {
   const { id } = useParams();
-  const { user } = useAuth();
-  const [employee, setEmployee] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const currentUser = useCurrentUser();
 
-  const isSelf = user?.role === "employee" && user?._id === id;
+  /**
+   * `id` is an Employee._id on the admin route and a User._id on the
+   * self-service route; the API accepts either and resolves the record.
+   * The query is skipped until the route actually has an id.
+   */
+  const {
+    data: employee,
+    error,
+    isLoading: loading,
+    refetch,
+  } = useGetEmployeeQuery(id, { skip: !id });
 
-  const fetchEmployee = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get(`/employee/${id}`);
-      if (data.success && data.employee) {
-        setEmployee(data.employee);
-      } else {
-        setError("Employee record not found.");
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the employee profile."));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchEmployee();
-  }, [fetchEmployee]);
+  // "Self" means the signed-in employee is looking at their own record. The
+  // admin route addresses an Employee._id, so the comparison is against the
+  // loaded record's own userId rather than the URL segment.
+  const isSelf =
+    currentUser?.role === "employee" &&
+    String(employee?.userId?._id ?? employee?.userId ?? "") === String(currentUser._id);
 
   if (loading) return <PageLoader label="Loading employee profile" />;
 
@@ -63,15 +57,15 @@ const View = () => {
     return (
       <>
         <PageHeader title="Employee Profile" />
-        <Alert variant="error">{error || "Employee record not found."}</Alert>
+        <Alert variant="error" onDismiss={refetch}>
+          {getErrorMessage(error, "Employee record not found.")}
+        </Alert>
       </>
     );
   }
 
   const { userId = {}, department = {} } = employee;
-  const avatar = userId.profileImage
-    ? `http://localhost:5000/${userId.profileImage}`
-    : undefined;
+  const avatar = assetUrl(userId.profileImage);
 
   return (
     <>
@@ -170,7 +164,10 @@ const View = () => {
               <DetailField label="Date of birth" value={formatDate(employee.dob)} />
               <DetailField label="Gender" value={employee.gender} />
               <DetailField label="Marital status" value={employee.maritalStatus} />
-              <DetailField label="Monthly salary" value={employee.salary ? `$${employee.salary}` : null} />
+              <DetailField
+                label="Monthly salary"
+                value={employee.salary ? formatINR(employee.salary) : null}
+              />
             </DetailList>
           </CardBody>
         </Card>

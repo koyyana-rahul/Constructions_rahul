@@ -12,9 +12,25 @@ import authenticate from "../middleware/authMiddlware.js";
 import { requireAdmin, requireRole, requireSelfOrAdmin } from "../middleware/authorize.js";
 import { uploadImage } from "../middleware/multerConfig.js";
 
-/** Resolves the `User._id` owning a `Client` record, for the ownership check. */
+/**
+ * Resolves the `User._id` owning a `Client` record, for the ownership check.
+ *
+ * The `:id` in the URL is NOT always a `Client._id`:
+ *   - the admin route addresses a client by `Client._id`;
+ *   - the self-service route (`/client-dashboard/profile/:id`) addresses them
+ *     by `User._id`.
+ *
+ * `getClient` already accepts either, so this resolver MUST accept either too.
+ * When it did not, a client opening their OWN profile was rejected with 403.
+ */
 const resolveClientUserId = async (req) => {
-  const client = await Client.findById(req.params.id).select("userId");
+  const { id } = req.params;
+
+  let client = await Client.findById(id).select("userId");
+  if (!client) {
+    client = await Client.findOne({ userId: id }).select("userId");
+  }
+
   return client?.userId ?? null;
 };
 

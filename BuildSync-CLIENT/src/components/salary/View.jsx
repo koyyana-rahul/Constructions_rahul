@@ -8,9 +8,9 @@ import { Card } from "../ui/Card";
 import Toolbar from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { useGetSalaryQuery } from "../../services/api/endpoints/salaryApi";
+import { getErrorMessage } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 import { formatDate } from "../../utils/tableUtils";
 import EmployeeContextHeader, {
   EmployeeCrumb,
@@ -68,20 +68,24 @@ const columns = [
  */
 const ViewSalary = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const [search, setSearch] = useState("");
 
   const isEmployeeSelf = user?.role === "employee";
   const role = user?.role ?? "employee";
-  const scope = role === "admin" ? "?scope=admin" : "";
 
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["salary", id, role],
-    async () => {
-      const { data: res } = await api.get(`/salary/${id}/${role}${scope}`);
-      return res.success ? res.salary || [] : [];
-    },
-    { staleTime: 30_000, poll: 90_000 }
+  /**
+   * `{ id, role }` is the cache key. The admin payroll view and the employee's
+   * own payroll view therefore occupy different entries, and switching the
+   * selected employee swaps the entry rather than refetching the old one.
+   *
+   * The URL id is a locator only. The backend resolves payroll from the
+   * verified token unless the caller is an admin passing `?scope=admin`, so
+   * editing the id cannot expose another employee's payslips.
+   */
+  const { data, error, isLoading, isFetching, refetch } = useGetSalaryQuery(
+    { id, role },
+    { skip: !id }
   );
 
   const rows = useMemo(
@@ -130,7 +134,7 @@ const ViewSalary = () => {
                 </Button>
               </Link>
             )}
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
           </>

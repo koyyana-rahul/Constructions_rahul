@@ -5,8 +5,9 @@ import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { Input } from "../ui/Form";
 import Button from "../ui/Button";
 import { Alert } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { useCurrentUser } from "../../features/auth/useSession";
+import { useChangePasswordMutation } from "../../services/api/endpoints/settingsApi";
+import { getErrorMessage } from "../../lib/api";
 
 /**
  * Shared change-password form.
@@ -15,12 +16,14 @@ import { useAuth } from "../../context/AuthContext";
  * navigated to `/admin-dashboard/employees` on success regardless of role, so
  * an employee saving their password was thrown into the admin employee list.
  * The destination is now derived from the user's actual role.
+ *
+ * The payload no longer carries a user id at all: the server takes the target
+ * from the verified token, so there is nothing for the client to get wrong.
  */
 const ChangePassword = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
 
   const [form, setForm] = useState({
-    userId: user?._id,
     oldPassword: "",
     newPassword: "",
     confirmPassword: "",
@@ -28,7 +31,8 @@ const ChangePassword = () => {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  const [changePassword, { isLoading: submitting }] = useChangePasswordMutation();
 
   const homeByRole = {
     admin: "/admin-dashboard",
@@ -63,19 +67,18 @@ const ChangePassword = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     setNotice(null);
+
     try {
-      const { data } = await api.put("/setting/change-password", form);
-      if (data.success) {
-        setNotice("Password updated successfully.");
-        setForm((prev) => ({ ...prev, oldPassword: "", newPassword: "", confirmPassword: "" }));
-      }
+      await changePassword({
+        oldPassword: form.oldPassword,
+        newPassword: form.newPassword,
+      }).unwrap();
+      setNotice("Password updated successfully.");
+      setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update your password."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

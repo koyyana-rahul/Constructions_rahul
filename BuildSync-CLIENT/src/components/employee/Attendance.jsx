@@ -9,8 +9,8 @@ import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
 import EmployeeContextHeader from "./EmployeeContextHeader";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetAttendanceQuery } from "../../services/api/endpoints/attendanceApi";
+import { getErrorMessage } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
 
 /** Single-employee attendance columns. The employee is named in the header. */
@@ -64,13 +64,12 @@ const EmployeeAttendance = () => {
   const { id } = useParams();
   const [search, setSearch] = useState("");
 
-  const { data, error, isLoading, refetch } = useQuery(
-    ["attendance", id],
-    async () => {
-      const { data: res } = await api.get("/attendance", { params: { employeeId: id } });
-      return res.success ? res.attendance || [] : [];
-    },
-    { staleTime: 15_000, poll: 60_000 }
+  // `id` is in the cache key, so Employee A's records and Employee B's records
+  // are separate entries and switching employees can never mix them. The
+  // filter is applied by the server's Mongo query, not in the browser.
+  const { data, error, isLoading, refetch } = useGetAttendanceQuery(
+    { employeeId: id },
+    { skip: !id }
   );
 
   const rows = useMemo(

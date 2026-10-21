@@ -12,9 +12,27 @@ import {
 } from "../controllers/employeeController.js";
 import Employee from "../models/Employee.js";
 
-/** Resolves the `User._id` owning an Employee record, for the ownership check. */
+/**
+ * Resolves the `User._id` owning an Employee record, for the ownership check.
+ *
+ * The `:id` in the URL is NOT always an `Employee._id`:
+ *   - the admin route addresses an employee by `Employee._id`;
+ *   - the self-service route (`/employee-dashboard/profile/:id`) addresses
+ *     them by `User._id`.
+ *
+ * `getEmployee` already accepts either, so this resolver MUST accept either
+ * too. When it did not, an employee opening their OWN profile was rejected
+ * with 403 FORBIDDEN_OWNERSHIP - the page was unreachable for the only person
+ * allowed to see it.
+ */
 const resolveEmployeeUserId = async (req) => {
-  const employee = await Employee.findById(req.params.id).select("userId");
+  const { id } = req.params;
+
+  let employee = await Employee.findById(id).select("userId");
+  if (!employee) {
+    employee = await Employee.findOne({ userId: id }).select("userId");
+  }
+
   return employee?.userId ?? null;
 };
 

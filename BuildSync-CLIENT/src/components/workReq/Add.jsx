@@ -3,15 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { LuClipboardList, LuFileText, LuPaperclip, LuCalendarDays } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Textarea } from "../ui/Form";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
-import { invalidate } from "../../hooks/useQuery";
+import { useAddWorkRequestMutation } from "../../services/api/endpoints/workRequestsApi";
+import { getErrorMessage } from "../../lib/api";
+import { useCurrentUser } from "../../features/auth/useSession";
 
 const ALLOWED = [".pdf", ".doc", ".docx", ".txt", ".xlsx"];
 const MAX_BYTES = 5 * 1024 * 1024;
 
 const AddWork = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const navigate = useNavigate();
 
   const [request, setRequest] = useState({
@@ -23,7 +23,10 @@ const AddWork = () => {
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  // Invalidates WorkRequests + Dashboard, so the client's own list and the
+  // admin queue both show the new request.
+  const [createRequest, { isLoading: submitting }] = useAddWorkRequestMutation();
 
   const handleChange = (event) => {
     const {name, value} = event.target;
@@ -78,26 +81,20 @@ const AddWork = () => {
     event.preventDefault();
     if (!validate()) return;
 
-    setSubmitting(true);
     setError(null);
     try {
       const payload = new FormData();
-      payload.append("userId", user._id);
+      payload.append("userId", user?._id);
       payload.append("name", request.name);
       payload.append("startDate", request.startDate);
       payload.append("endDate", request.endDate);
       payload.append("description", request.description);
       if (file) payload.append("details", file);
 
-      const { data } = await api.post("/work-request/add", payload);
-      if (data.success) {
-        invalidate(["work-requests", "client-dashboard", "dashboard-summary"]);
-        navigate(`/client-dashboard/work/${user._id}`);
-      }
+      await createRequest(payload).unwrap();
+      navigate(`/client-dashboard/work/${user?._id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to submit your work request."));
-    } finally {
-      setSubmitting(false);
     }
   };
 

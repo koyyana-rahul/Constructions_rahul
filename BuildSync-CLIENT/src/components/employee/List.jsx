@@ -9,25 +9,20 @@ import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import Avatar from "../ui/Avatar";
 import { Alert } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
+import { useGetEmployeesQuery } from "../../services/api/endpoints/employeesApi";
+import { getErrorMessage, assetUrl } from "../../lib/api";
 import { columns, EmployeeButtons } from "../../utils/EmployeeHelper";
-
-const EMPLOYEE_IMAGE_URL = (filename) =>
-  filename ? `http://localhost:5000/${filename}` : undefined;
 
 const EmployeeList = () => {
   const [search, setSearch] = useState("");
 
-  // Background refresh keeps this list current with no manual Refresh button.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["employees"],
-    async () => {
-      const { data: res } = await api.get("/employee", { params: { limit: 100 } });
-      return res.success ? res.employees || [] : [];
-    },
-    { staleTime: 15_000, poll: 45_000 }
-  );
+  const {
+    data,
+    error,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useGetEmployeesQuery({ limit: 100 });
 
   const employees = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -40,7 +35,7 @@ const EmployeeList = () => {
       designation: emp.designation,
       dob: emp.dob,
       isActive: emp.isActive !== false,
-      profileImage: EMPLOYEE_IMAGE_URL(emp.userId?.profileImage),
+      profileImage: assetUrl(emp.userId?.profileImage),
       userIdRef: emp.userId?._id,
     }));
 
@@ -62,7 +57,7 @@ const EmployeeList = () => {
         breadcrumbs={[{ label: "Admin", to: "/admin-dashboard" }, { label: "Employees" }]}
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !isLoading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/admin-dashboard/add-employee" className="w-full sm:w-auto">

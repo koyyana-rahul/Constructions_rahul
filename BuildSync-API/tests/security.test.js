@@ -312,6 +312,78 @@ describe("leave management", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Leave cancellation (model enum must include "Cancelled")             */
+/* ------------------------------------------------------------------ */
+describe("leave cancellation", () => {
+  let cancelLeaveId;
+
+  before(async () => {
+    const r = await api("POST", "/leave/add", {
+      token: empT,
+      body: { leaveType: "Casual Leave", startDate: "2027-08-01", endDate: "2027-08-03", reason: "Cancel me" },
+    });
+    cancelLeaveId = r.body.leave._id;
+  });
+
+  it("lets an employee withdraw their own pending request", async () => {
+    const r = await api("PUT", `/leave/${cancelLeaveId}/cancel`, { token: empT });
+    assert.equal(r.status, 200, `expected 200, got ${r.status}: ${JSON.stringify(r.body)}`);
+    assert.equal(r.body.leave.status, "Cancelled");
+  });
+
+  it("refuses to cancel a request that is no longer pending", async () => {
+    const r = await api("PUT", `/leave/${cancelLeaveId}/cancel`, { token: empT });
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "INVALID_TRANSITION");
+  });
+
+  it("does not let an employee cancel somebody else's request", async () => {
+    // A dedicated second employee, so "another employee's request" is
+    // actually reachable regardless of test ordering.
+    const bcrypt = (await import("bcrypt")).default;
+    const otherUser = await User.create({
+      name: "Cancel Other",
+      email: "cancel-other@test.local",
+      password: await bcrypt.hash(PASSWORD, 10),
+      role: "employee",
+    });
+    const otherEmp = await Employee.create({
+      userId: otherUser._id,
+      employeeId: "T-CANCEL-OTHER",
+      department: ids.dept,
+      salary: 30000,
+    });
+
+    const mine = await api("POST", "/leave/add", {
+      token: empT,
+      body: { leaveType: "Annual Leave", startDate: "2027-09-01", endDate: "2027-09-02", reason: "Owned by emp" },
+    });
+    const id = mine.body.leave._id;
+
+    const otherEmpT = await loginAs("cancel-other@test.local", PASSWORD);
+    const r = await api("PUT", `/leave/${id}/cancel`, { token: otherEmpT });
+    assert.equal(r.status, 403);
+    assert.equal(r.body.code, "FORBIDDEN_OWNERSHIP");
+
+    // And the request is untouched.
+    const still = await api("GET", `/leave/detail/${id}`, { token: adminT });
+    assert.equal(still.body.leave.status, "Pending");
+
+    await Employee.deleteOne({ _id: otherEmp._id });
+    await User.deleteOne({ _id: otherUser._id });
+  });
+
+  it("counts cancelled requests in the admin dashboard", async () => {
+    const r = await api("GET", "/dashboard/summary", { token: adminT });
+    assert.equal(r.status, 200);
+    assert.ok(
+      r.body.leaveSummary.cancelled >= 1,
+      "the dashboard must count Cancelled leaves, not always report zero"
+    );
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Attendance                                                          */
 /* ------------------------------------------------------------------ */
 describe("attendance", () => {
@@ -629,6 +701,20 @@ describe("client access restrictions", () => {
     assert.equal(r.status, 403);
   });
 
+  it("can open their OWN profile by user id", async () => {
+    // The self-service route addresses the record by User._id, the admin route
+    // by Client._id. The ownership resolver must accept BOTH, otherwise the
+    // only person allowed to see a client's own record is locked out of it.
+    const own = await api("GET", `/client/${ids.activatedClientUserId}`, { token: clientT });
+    assert.equal(own.status, 200, `expected 200, got ${own.status}: ${JSON.stringify(own.body)}`);
+    assert.equal(String(own.body.client.userId._id), ids.activatedClientUserId);
+  });
+
+  it("can still open their own profile by client id", async () => {
+    const own = await api("GET", `/client/${ids.cliRec}`, { token: cliT });
+    assert.equal(own.status, 200);
+  });
+
   it("submits a work request as itself", async () => {
     const r = await api("POST", "/work-request/add", {
       token: clientT,
@@ -799,6 +885,26 @@ it("does not return the admin's own or other employees' leave to an employee", a
   it("forbids an employee reading the attendance board", async () => {
     const r = await api("GET", "/attendance", { token: empT });
     assert.equal(r.status, 403);
+  });
+
+  /* ----------------------------- profile ---------------------------- */
+
+  it("lets an employee open their OWN profile by user id", async () => {
+    // The self-service route addresses the record by User._id; the admin
+    // route uses Employee._id. Both must resolve to the same owner.
+    const byUserId = await api("GET", `/employee/${ids.empUser}`, { token: empT });
+    assert.equal(byUserId.status, 200, `expected 200, got ${byUserId.status}: ${JSON.stringify(byUserId.body)}`);
+    assert.equal(String(byUserId.body.employee.userId._id), String(ids.empUser));
+
+    const byEmployeeId = await api("GET", `/employee/${ids.empRec}`, { token: empT });
+    assert.equal(byEmployeeId.status, 200);
+    assert.equal(byEmployeeId.body.employee._id, String(ids.empRec));
+  });
+
+  it("still forbids an employee opening ANOTHER employee's profile", async () => {
+    const byEmployeeId = await api("GET", `/employee/${otherEmpRec}`, { token: empT });
+    assert.equal(byEmployeeId.status, 403);
+    assert.equal(byEmployeeId.body.code, "FORBIDDEN_OWNERSHIP");
   });
 });
 

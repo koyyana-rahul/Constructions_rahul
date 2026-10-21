@@ -14,34 +14,29 @@ import Button from "../ui/Button";
 import { Card, CardHeader, CardBody } from "../ui/Card";
 import ProgressBar from "../ui/ProgressBar";
 import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
-import { useAuth } from "../../context/AuthContext";
-import { api } from "../../lib/api";
-import { useQuery } from "../../hooks/useQuery";
+import { useCurrentUser } from "../../features/auth/useSession";
+import { useGetWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
+import { getErrorMessage } from "../../lib/api";
 
 const ClientSummary = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
 
-  // The admin approving a request must show up here without a reload.
+  /**
+   * The API scopes this endpoint to the authenticated client
+   * (see `clientIdFor()` in the work controller), so there is no client-side
+   * filter to apply. Filtering here on `clientId._id === user._id` would
+   * compare a Client._id against a User._id and never match.
+   *
+   * RTK Query polls in the background, so an administrator's decision reaches
+   * this screen without the client having to reload.
+   */
   const {
     data: requests,
     error,
     isLoading: loading,
-    isRefreshing,
+    isFetching,
     refetch,
-  } = useQuery(
-    ["client-dashboard", user?._id],
-    async () => {
-      const { data: res } = await api.get("/work-request");
-      if (!res.success) return [];
-
-      // The server already scopes this endpoint to the authenticated client
-      // (see clientIdFor() in the work controller), so no client-side filter
-      // is applied. Filtering here on `clientId._id === user._id` would compare
-      // a Client._id against a User._id and never match.
-      return res.requests || [];
-    },
-    { staleTime: 10_000, poll: 25_000 }
-  );
+  } = useGetWorkRequestsQuery();
 
   const list = requests ?? [];
   const approved = list.filter((r) => r.status === "Approved").length;
@@ -55,7 +50,7 @@ const ClientSummary = () => {
         description="Track the work requests you have raised with your contractor."
         actions={
           <>
-            {isRefreshing && (
+            {isFetching && !loading && (
               <span className="hidden text-xs text-concrete-400 sm:inline">Syncing…</span>
             )}
             <Link to="/client-dashboard/add-work">
@@ -68,9 +63,11 @@ const ClientSummary = () => {
         }
       />
 
-      <Alert variant="error" className="mb-4 sm:mb-5" onDismiss={() => {}}>
-        {error}
-      </Alert>
+      {error && (
+        <Alert variant="error" className="mb-4 sm:mb-5" onDismiss={refetch}>
+          {getErrorMessage(error, "Could not load your work requests.")}
+        </Alert>
+      )}
 
       {loading ? (
         <CardSkeleton count={3} />
@@ -94,7 +91,7 @@ const ClientSummary = () => {
               actions={
                 <Link
                   to={`/client-dashboard/work/${user?._id}`}
-                  className="inline-flex items-center gap-1 rounded font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700"
+                  className="inline-flex items-center gap-1 font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700"
                 >
                   View all
                   <LuArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -147,9 +144,10 @@ const ClientSummary = () => {
                             {request.name}
                           </p>
                           <p className="text-xs text-concrete-500">
-                            {request.requestType}
                             {request.startDate &&
-                              ` · ${new Date(request.startDate).toLocaleDateString()}`}
+                              `From ${new Date(request.startDate).toLocaleDateString()}`}
+                            {request.endDate &&
+                              ` to ${new Date(request.endDate).toLocaleDateString()}`}
                           </p>
                         </div>
                         <span

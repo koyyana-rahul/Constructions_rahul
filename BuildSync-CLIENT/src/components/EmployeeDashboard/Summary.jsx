@@ -14,40 +14,46 @@ import Button from "../ui/Button";
 import { Card, CardHeader, CardBody } from "../ui/Card";
 import ProgressBar from "../ui/ProgressBar";
 import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
-import { useQuery } from "../../hooks/useQuery";
-import { api, getErrorMessage } from "../../lib/api";
-import { useAuth } from "../../context/AuthContext";
+import { useCurrentUser } from "../../features/auth/useSession";
+import { useGetEmployeeLeavesQuery } from "../../services/api/endpoints/leavesApi";
+import { useGetSalaryQuery } from "../../services/api/endpoints/salaryApi";
+import { getErrorMessage } from "../../lib/api";
 import { formatINR } from "../../utils/format";
 
 const EmployeeSummary = () => {
-  const { user } = useAuth();
+  const user = useCurrentUser();
+  const userId = user?._id;
 
-  // After applying for leave the counts must update without a manual reload.
-  const { data, error, isLoading, isRefreshing, refetch } = useQuery(
-    ["employee-dashboard", user?._id],
-    async () => {
-      if (!user?._id) return { leaves: [], salary: [] };
-      const [leaveRes, salaryRes] = await Promise.allSettled([
-        api.get(`/leave/${user._id}/employee`),
-        api.get(`/salary/${user._id}/employee`),
-      ]);
+  /**
+   * Both reads are scoped by the SERVER to the signed-in employee: for a
+   * non-admin the `:id` in the URL is ignored and the employee is resolved
+   * from the verified token (see `getLeave` / `getSalary` in the API). The
+   * queries are skipped until the session has resolved, so a deep link or a
+   * refresh never fires a request with an undefined id.
+   */
+  const {
+    data: leaves = [],
+    error: leaveError,
+    isLoading: leavesLoading,
+    isFetching: leavesFetching,
+    refetch: refetchLeaves,
+  } = useGetEmployeeLeavesQuery({ id: userId, role: "employee" }, { skip: !userId });
 
-      const leaves =
-        leaveRes.status === "fulfilled" && leaveRes.value.data.success
-          ? leaveRes.value.data.leaves || []
-          : [];
-      const salary =
-        salaryRes.status === "fulfilled" && salaryRes.value.data.success
-          ? salaryRes.value.data.salary || []
-          : [];
+  const {
+    data: salary = [],
+    error: salaryError,
+    isLoading: salaryLoading,
+    isFetching: salaryFetching,
+    refetch: refetchSalary,
+  } = useGetSalaryQuery({ id: userId, role: "employee" }, { skip: !userId });
 
-      return { leaves, salary };
-    },
-    { staleTime: 10_000, poll: 30_000 }
-  );
-
-  const leaves = data?.leaves ?? [];
-  const salary = data?.salary ?? [];
+  const error = leaveError || salaryError;
+  const isLoading = leavesLoading || salaryLoading;
+  const isRefreshing = leavesFetching || salaryFetching;
+  const refetch = () => {
+    refetchLeaves();
+    refetchSalary();
+  };
 
   const approved = leaves.filter((l) => l.status === "Approved").length;
   const pending = leaves.filter((l) => l.status === "Pending").length;

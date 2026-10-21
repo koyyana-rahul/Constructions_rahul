@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import mongoose from "mongoose";
 import authRouter from "./routes/auth.js";
 import departmentRouter from "./routes/department.js";
 import employeeRouter from "./routes/employee.js";
@@ -24,9 +25,27 @@ export const createApp = () => {
   app.use(express.json());
   app.use(express.static("public/uploads"));
 
-  app.get("/api/health", (_req, res) =>
-    res.status(200).json({ success: true, status: "ok", uptime: process.uptime() })
-  );
+  /**
+   * Readiness probe.
+   *
+   * This reports the DATABASE state, not just "the process is alive".
+   * A plain `{"status":"ok"}` was returned even when MongoDB was
+   * unreachable, which told an operator the deployment was healthy while
+   * every database-backed request was timing out.
+   *
+   * 200 = ready, 503 = not ready (a load balancer should not route here).
+   */
+  app.get("/api/health", (_req, res) => {
+    const states = ["disconnected", "connected", "connecting", "disconnecting"];
+    const ready = mongoose.connection.readyState === 1;
+
+    return res.status(ready ? 200 : 503).json({
+      success: ready,
+      status: ready ? "ok" : "degraded",
+      database: states[mongoose.connection.readyState] ?? "unknown",
+      uptime: process.uptime(),
+    });
+  });
 
   app.use("/api/auth", authRouter);
   app.use("/api/department", departmentRouter);

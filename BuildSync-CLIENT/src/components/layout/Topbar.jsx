@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { LuMenu, LuLogOut, LuChevronDown, LuSettings } from "react-icons/lu";
-import { useAuth } from "../../context/AuthContext";
+import { useCurrentUser, useSignOut } from "../../features/auth/useSession";
+import { useAppSelector } from "../../app/hooks";
+import { selectHomePath } from "../../features/auth/authSelectors";
+import { assetUrl } from "../../lib/api";
 import Avatar from "../ui/Avatar";
 
 const ROLE_LABELS = {
@@ -10,12 +13,15 @@ const ROLE_LABELS = {
   client: "Client",
 };
 
-const Topbar = ({ onOpenMobileNav, user }) => {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
+const Topbar = ({ onOpenMobileNav }) => {
+  const user = useCurrentUser();
+  const settingsPath = useAppSelector(selectHomePath);
+  const signOut = useSignOut();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
+  // Close on outside click or Escape.
   useEffect(() => {
     if (!menuOpen) return undefined;
     const onPointerDown = (event) => {
@@ -32,27 +38,23 @@ const Topbar = ({ onOpenMobileNav, user }) => {
     };
   }, [menuOpen]);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
-
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-concrete-200 bg-white/95 px-4 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-concrete-200 bg-white/95 px-4 backdrop-blur sm:gap-4 sm:px-6">
       <button
         type="button"
         onClick={onOpenMobileNav}
         aria-label="Open navigation"
-        className="-ml-1 rounded-md p-2 text-concrete-500 transition-colors hover:bg-concrete-100 hover:text-navy-900 lg:hidden"
+        aria-controls="main-navigation"
+        className="-ml-1 shrink-0 rounded-md p-2 text-concrete-500 transition-colors hover:bg-concrete-100 hover:text-navy-900 lg:hidden"
       >
         <LuMenu className="h-5 w-5" aria-hidden="true" />
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate font-display text-xs font-semibold uppercase tracking-wider text-concrete-500">
+        <p className="truncate font-display text-2xs font-semibold uppercase tracking-[0.16em] text-concrete-500 sm:text-xs sm:tracking-wider">
           {ROLE_LABELS[user?.role] || "Portal"}
         </p>
-        <p className="truncate font-display text-base font-semibold uppercase tracking-wide text-navy-900">
+        <p className="truncate font-display text-sm font-semibold uppercase tracking-wide text-navy-900 sm:text-base">
           Welcome back, {user?.name}
         </p>
       </div>
@@ -65,7 +67,7 @@ const Topbar = ({ onOpenMobileNav, user }) => {
           aria-expanded={menuOpen}
           className="flex items-center gap-2 rounded-md border border-transparent p-1 pr-2 transition-colors hover:border-concrete-200 hover:bg-concrete-50"
         >
-          <Avatar name={user?.name} size="md" />
+          <Avatar src={assetUrl(user?.profileImage)} name={user?.name} size="md" />
           <span className="hidden max-w-[10rem] truncate font-display text-sm font-medium text-navy-800 sm:block">
             {user?.name}
           </span>
@@ -80,7 +82,7 @@ const Topbar = ({ onOpenMobileNav, user }) => {
         {menuOpen && (
           <div
             role="menu"
-            className="absolute right-0 mt-2 w-56 animate-scale-in overflow-hidden rounded-lg border border-concrete-200 bg-white shadow-popover"
+            className="absolute right-0 mt-2 w-60 max-w-[calc(100vw-2rem)] animate-scale-in overflow-hidden rounded-lg border border-concrete-200 bg-white shadow-popover"
           >
             <div className="border-b border-concrete-200 px-4 py-3">
               <p className="truncate font-display text-sm font-semibold text-navy-900">
@@ -90,7 +92,7 @@ const Topbar = ({ onOpenMobileNav, user }) => {
             </div>
             <Link
               role="menuitem"
-              to={`/${user?.role === "admin" ? "admin" : user?.role}-dashboard/setting`}
+              to={`${settingsPath}/setting`}
               onClick={() => setMenuOpen(false)}
               className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-navy-800 transition-colors hover:bg-concrete-50"
             >
@@ -100,7 +102,7 @@ const Topbar = ({ onOpenMobileNav, user }) => {
             <button
               role="menuitem"
               type="button"
-              onClick={handleLogout}
+              onClick={signOut}
               className="flex w-full items-center gap-2.5 border-t border-concrete-200 px-4 py-2.5 text-left text-sm text-danger-600 transition-colors hover:bg-danger-50"
             >
               <LuLogOut className="h-4 w-4" aria-hidden="true" />

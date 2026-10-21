@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --env-file=.env --test tests/*.test.js",
-    "start": "nodemon --env-file=.env index.js",
-    "test:watch": "node --env-file=.env --test --watch tests/*.test.js",
-    "migrate": "node --env-file=.env scripts/migrate.js",
-    "seed": "node --env-file=.env userSeed.js"
+    "test": "node --env-file-if-exists=.env --env-file=.env.test --test tests/*.test.js",
+    "start": "nodemon --env-file-if-exists=.env index.js",
+    "test:watch": "node --env-file-if-exists=.env --env-file=.env.test --test --watch tests/*.test.js",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "seed": "node --env-file-if-exists=.env userSeed.js",
+    "dev:local": "node --env-file-if-exists=.env scripts/dev-local.mjs"
   },
   "keywords": [],
   "author": "",
@@ -25,5 +26,8 @@
     "nodemon": "^3.1.4",
     "path": "^0.12.7"
   },
-  "main": "index.js"
+  "main": "index.js",
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0"
+  }
 }

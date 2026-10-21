@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   LuCheckCircle2,
@@ -17,60 +17,41 @@ import Avatar from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import ConfirmDialog, { useConfirm } from "../ui/ConfirmDialog";
 import { Alert, PageLoader } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
-import { useMutation } from "../../hooks/useQuery";
+import {
+  useGetWorkRequestByIdQuery,
+  useUpdateWorkRequestMutation,
+} from "../../services/api/endpoints/workRequestsApi";
+import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
 
 const WorkDetail = () => {
   const { id } = useParams();
-  const [request, setRequest] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionError, setRejectionError] = useState(undefined);
   const confirm = useConfirm();
 
-  const fetchRequest = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get(`/work-request/detail/${id}`);
-      if (data.success) setRequest(data.request || data.workRequest);
-      else setError("Work request not found.");
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the work request."));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const {
+    data: request,
+    isLoading: loading,
+    error: loadError,
+  } = useGetWorkRequestByIdQuery(id, { skip: !id });
 
-  useEffect(() => {
-    fetchRequest();
-  }, [fetchRequest]);
+  // Invalidates the record, the admin queue, the client's own list and the
+  // dashboard, so all four agree on the new status without a manual reload.
+  const [decide, { isPending }] = useUpdateWorkRequestMutation();
 
-  // The admin queue, the client view and the dashboard counts all refresh
-  // from the server-confirmed change.
-  const { mutate: decide } = useMutation(
-    async ({ status, rejectionReason }) => {
-      // The API requires `rejectionReason` whenever status is Rejected.
-      const body = status === "Rejected" ? { status, rejectionReason } : { status };
-      const { data } = await api.put(`/work-request/${id}`, body);
-      if (!data.success) throw new Error("Unable to update the work request.");
-      return data;
-    },
-    { invalidate: ["work-requests", "client-dashboard", "dashboard-summary"] }
-  );
-
-  const changeStatus = async (status, rejectionReason) => {
+  const changeStatus = async (status, reason) => {
     confirm.setLoading(true);
     setError(null);
     try {
-      await decide({ status, rejectionReason });
+      // The API requires `rejectionReason` whenever status is Rejected.
+      await decide(
+        status === "Rejected" ? { id, status, rejectionReason: reason } : { id, status }
+      ).unwrap();
       confirm.close();
       setNotice(`Work request ${status.toLowerCase()}.`);
-      const fresh = await api.get(`/work-request/detail/${id}`);
-      if (fresh.data?.success) setRequest(fresh.data.request);
     } catch (err) {
       confirm.close();
       setError(getErrorMessage(err, "Unable to update the work request."));
@@ -88,15 +69,19 @@ const WorkDetail = () => {
     return (
       <>
         <PageHeader title="Work Request" />
-        <Alert variant="error">{error || "Work request not found."}</Alert>
+        <Alert variant="error">
+          {isPermissionError(loadError)
+            ? "You do not have permission to view this work request."
+            : loadError
+            ? getErrorMessage(loadError, "Unable to load the work request.")
+            : "Work request not found."}
+        </Alert>
       </>
     );
   }
 
   const client = request.clientId || {};
-  const avatar = client.userId?.profileImage
-    ? `http://localhost:5000/${client.userId.profileImage}`
-    : undefined;
+  const avatar = assetUrl(client.userId?.profileImage);
   const days =
     Math.round((new Date(request.endDate) - new Date(request.startDate)) / 86400000) || 0;
 
@@ -125,6 +110,7 @@ const WorkDetail = () => {
                   variant="outline"
                   size="sm"
                   className="border-danger-500 text-danger-600 hover:bg-danger-50"
+                  disabled={isPending}
                   onClick={() => {
                     setRejectionReason("");
                     setRejectionError(undefined);
@@ -137,6 +123,7 @@ const WorkDetail = () => {
                 <Button
                   variant="accent"
                   size="sm"
+                  disabled={isPending}
                   onClick={() => confirm.open("Approved")}
                 >
                   <LuCheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -208,10 +195,10 @@ const WorkDetail = () => {
                     Supporting document
                   </p>
                   <a
-                    href={`http://localhost:5000/${request.details}`}
+                    href={assetUrl(request.details)}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-3 rounded-md border border-concrete-200 bg-white px-4 py-3 text-sm text-navy-800 transition-colors hover:border-navy-400 hover:bg-navy-50"
+                    className="mt-2 inline-flex w-full items-center gap-3 rounded-md border border-concrete-200 bg-white px-4 py-3 text-sm text-navy-800 transition-colors hover:border-navy-400 hover:bg-navy-50"
                   >
                     <LuFileText className="h-4 w-4 shrink-0 text-concrete-400" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate font-mono text-xs">

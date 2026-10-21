@@ -4,11 +4,8 @@ import Avatar from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { Alert, Skeleton } from "../ui/Feedback";
-import useEmployee from "../../hooks/useEmployee";
-import { getErrorMessage, isPermissionError } from "../../lib/api";
-
-const EMPLOYEE_IMAGE_URL = (filename) =>
-  filename ? `http://localhost:5000/${filename}` : undefined;
+import { useGetEmployeeQuery } from "../../services/api/endpoints/employeesApi";
+import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
 
 /**
  * Section tabs. The employee id is part of every href, so switching sections
@@ -44,7 +41,7 @@ export const EmployeeSectionTabs = ({ employeeId, active }) => (
             <Link
               to={section.to}
               aria-current={isActive ? "page" : undefined}
-              className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wide transition-colors ${
+              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wide transition-colors ${
                 isActive
                   ? "bg-navy-900 text-white shadow-card"
                   : "text-concrete-600 hover:bg-white hover:text-navy-800"
@@ -63,13 +60,12 @@ export const EmployeeSectionTabs = ({ employeeId, active }) => (
 /**
  * Breadcrumb segment showing the selected employee's name.
  *
- * Reads the same `["employee", id]` cache entry as the header, so the name in
- * the trail and the identity block cannot disagree, and the shared entry is
- * fetched once. Returns a plain node so it can be used as a PageHeader crumb
- * label.
+ * Reads the same `getEmployee(id)` cache entry as the header below it, so the
+ * name in the trail and the identity block cannot disagree, and the record is
+ * fetched once rather than twice.
  */
 export const EmployeeCrumb = ({ id }) => {
-  const { data } = useEmployee(id);
+  const { data } = useGetEmployeeQuery(id, { skip: !id });
   return <>{data?.userId?.name || "Employee"}</>;
 };
 
@@ -82,7 +78,9 @@ export const EmployeeCrumb = ({ id }) => {
  *
  * The employee is fetched by `Employee._id` - the same identifier the leave,
  * salary and attendance endpoints use - so the header and the records beneath
- * it are guaranteed to describe the same person.
+ * it are guaranteed to describe the same person. Switching employees changes
+ * the cache key, which means the previous employee's records are never left on
+ * screen and can never be returned late for the new selection.
  *
  * `showIdentity={false}` renders only the section tabs, for the profile page
  * which already displays the complete identity block itself.
@@ -90,9 +88,7 @@ export const EmployeeCrumb = ({ id }) => {
 const EmployeeContextHeader = ({ active = "profile", showIdentity = true, children }) => {
   const { id } = useParams();
 
-  // Shared cache entry: the breadcrumb rendered above this header reads the
-  // same record without issuing a second request.
-  const { data: employee, error, isLoading } = useEmployee(id);
+  const { data: employee, error, isLoading } = useGetEmployeeQuery(id, { skip: !id });
 
   // Profile page owns its own loading/error handling.
   if (!showIdentity && (isLoading || !employee)) return null;
@@ -155,7 +151,7 @@ const EmployeeContextHeader = ({ active = "profile", showIdentity = true, childr
     <Card className="mb-4 overflow-hidden sm:mb-5">
       {showIdentity && (
         <div className="flex flex-wrap items-start gap-x-4 gap-y-3 p-4 sm:p-5">
-          <Avatar src={EMPLOYEE_IMAGE_URL(user.profileImage)} name={name} size="lg" />
+          <Avatar src={assetUrl(user.profileImage)} name={name} size="lg" />
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
