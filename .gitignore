@@ -13,6 +13,10 @@
 /BuildSync-API/.env
 /BuildSync-API/.env.*.local
 
+# Captured email messages (development mail provider). These contain live
+# password-setup links and must never be committed.
+/BuildSync-API/.email-outbox/
+
 # Ignoră conținutul din uploads
 /BuildSync-API/public/uploads/*
 
