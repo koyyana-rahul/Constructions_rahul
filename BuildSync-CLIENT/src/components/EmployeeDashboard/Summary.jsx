@@ -47,13 +47,12 @@ const EmployeeSummary = () => {
     refetch: refetchSalary,
   } = useGetSalaryQuery({ id: userId, role: "employee" }, { skip: !userId });
 
-  const error = leaveError || salaryError;
+  const error = leaveError ?? salaryError;
   const isLoading = leavesLoading || salaryLoading;
   const isRefreshing = leavesFetching || salaryFetching;
-  const refetch = () => {
-    refetchLeaves();
-    refetchSalary();
-  };
+  // Retry only the query that failed, so a payroll outage does not re-issue
+  // a leave request (and vice versa).
+  const refetch = leaveError ? refetchLeaves : refetchSalary;
 
   const approved = leaves.filter((l) => l.status === "Approved").length;
   const pending = leaves.filter((l) => l.status === "Pending").length;

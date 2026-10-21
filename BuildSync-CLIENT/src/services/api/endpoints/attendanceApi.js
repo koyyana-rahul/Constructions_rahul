@@ -31,7 +31,14 @@ export const attendanceApi = baseApi.injectEndpoints({
         method: "GET",
         params: { date: date || undefined, page, limit },
       }),
-      transformResponse: (res) => res?.groupData ?? {},
+      // The server paginates by day and reports how many days it actually
+      // returned, which is the only reliable signal for "is there a next page".
+      // Returning both keeps that decision server-driven instead of guessed
+      // from the size of the last page.
+      transformResponse: (res) => ({
+        groupData: res?.groupData ?? {},
+        daysReturned: res?.pagination?.daysReturned ?? 0,
+      }),
       providesTags: [TAGS.AttendanceReport, TAGS.Attendance],
     }),
 

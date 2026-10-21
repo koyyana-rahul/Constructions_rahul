@@ -32,8 +32,10 @@ const Login = () => {
   const [login, { isLoading }] = useLoginMutation();
 
   const justActivated = location.state?.activated;
-  // Where the route guard wanted to send the visitor before signing in.
+  // Where the route guard wanted to send the visitor before signing in, and
+  // which roles are allowed to land there.
   const redirectTo = location.state?.from;
+  const allowed = location.state?.allowed;
 
   const validate = () => {
     const next = {};
@@ -63,17 +65,22 @@ const Login = () => {
        * race. Reading the stale selector value sent users back to /login
        * about half the time. The response is authoritative and immediate.
        */
-      const roleHome = homePathForRole(result?.user?.role);
+      const role = result?.user?.role;
+      const roleHome = homePathForRole(role);
 
-      // `redirectTo` is honoured only for the routes the guard actually
-      // protects, otherwise a crafted `?from=` could bounce a signed-in user
-      // somewhere unexpected.
-      const destination =
-        redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
-          ? redirectTo
-          : roleHome;
+      /**
+       * The deep-linked page is only honoured when the signed-in role is
+       * actually allowed there. A client who follows a link to
+       * /admin-dashboard lands on their own dashboard instead of being
+       * redirected away from a page they cannot use.
+       */
+      const mayUseRedirect =
+        redirectTo &&
+        redirectTo.startsWith("/") &&
+        !redirectTo.startsWith("//") &&
+        (Array.isArray(allowed) ? allowed.includes(role) : true);
 
-      navigate(destination, { replace: true });
+      navigate(mayUseRedirect ? redirectTo : roleHome, { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Unable to sign in. Please try again."));
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { LuFileBarChart, LuChevronDown, LuLoader2 } from "react-icons/lu";
 import PageHeader from "../ui/PageHeader";
@@ -6,46 +6,49 @@ import Button from "../ui/Button";
 import { Card, CardHeader, CardBody } from "../ui/Card";
 import { StatusBadge } from "../ui/Badge";
 import { Alert, EmptyState, TableSkeleton, PermissionDenied } from "../ui/Feedback";
-import { api, getErrorMessage } from "../../lib/api";
+import { getErrorMessage, isPermissionError } from "../../lib/api";
+import { useGetAttendanceReportQuery } from "../../services/api/endpoints/attendanceApi";
 import { formatDate } from "../../utils/tableUtils";
 
 const PAGE_SIZE = 5;
 
 const AttendanceReport = () => {
-  const [report, setReport] = useState({});
-  const [skip, setSkip] = useState(0);
+  const [page, setPage] = useState(1);
   const [dateFilter, setDateFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [forbidden, setForbidden] = useState(false);
 
-  const fetchReport = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setForbidden(false);
-    try {
-      const query = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(skip) });
-      if (dateFilter) query.append("date", dateFilter);
+  // The server paginates by day (`page`/`limit`), not by raw offset, so the
+  // old `skip` parameter silently always returned the first page.
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+    error,
+    refetch,
+  } = useGetAttendanceReportQuery({ date: dateFilter, page, limit: PAGE_SIZE });
 
-      const { data } = await api.get(`/attendance/report?${query.toString()}`);
-      if (data.success) {
-        setReport((prev) =>
-          skip === 0 ? data.groupData || {} : { ...prev, ...(data.groupData || {}) }
-        );
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to load the attendance report."));
-    } finally {
-      setLoading(false);
-    }
-  }, [skip, dateFilter]);
-
+  // Days accumulate as the user pages through history. RTK Query owns each
+  // page's fetch and cache; merging them is a view concern, so it stays local.
+  const [report, setReport] = useState({});
+  const [lastPageFull, setLastPageFull] = useState(false);
   useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
+    if (data) {
+      setReport((prev) => (page === 1 ? data.groupData : { ...prev, ...data.groupData }));
+      setLastPageFull(data.daysReturned >= PAGE_SIZE);
+    }
+  }, [data, page]);
 
+  // Changing the date filter invalidates every page already merged in.
+  const handleDateChange = (value) => {
+    setDateFilter(value);
+    setPage(1);
+    setReport({});
+    setLastPageFull(false);
+  };
+
+  const forbidden = isPermissionError(error);
   const dates = Object.keys(report).sort((a, b) => new Date(b) - new Date(a));
-  const hasMore = dates.length >= PAGE_SIZE;
+  // A short page means the server has nothing after it.
+  const hasMore = lastPageFull;
 
   const totalRecords = dates.reduce(
     (sum, date) => sum + (report[date]?.length || 0),
@@ -84,10 +87,7 @@ const AttendanceReport = () => {
               id="dateFilter"
               type="date"
               value={dateFilter}
-              onChange={(event) => {
-                setDateFilter(event.target.value);
-                setSkip(0);
-              }}
+              onChange={(event) => handleDateChange(event.target.value)}
               className="w-full cursor-pointer rounded-md border border-concrete-300 bg-white px-3 py-2 text-sm text-navy-900 transition-colors hover:border-concrete-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-400"
             />
           </div>
@@ -99,10 +99,7 @@ const AttendanceReport = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setDateFilter("");
-                  setSkip(0);
-                }}
+                onClick={() => handleDateChange("")}
               >
                 Clear
               </Button>
@@ -111,9 +108,11 @@ const AttendanceReport = () => {
         </CardBody>
       </Card>
 
-      <Alert variant="error" className="mb-4 sm:mb-5" onDismiss={() => setError(null)}>
-        {error}
-      </Alert>
+      {error && !forbidden && (
+        <Alert variant="error" className="mb-4 sm:mb-5">
+          {getErrorMessage(error, "Unable to load the attendance report.")}
+        </Alert>
+      )}
 
       {forbidden && (
         <Card className="mb-5 border-warning-500/30">
@@ -131,15 +130,23 @@ const AttendanceReport = () => {
             icon={LuFileBarChart}
             title="No attendance records"
             description={
-              dateFilter
+              error && !forbidden
+                ? getErrorMessage(error, "The report could not be loaded.")
+                : dateFilter
                 ? `No records were found for ${formatDate(dateFilter)}.`
                 : "Attendance records appear here once you start marking your workforce."
             }
             action={
-              dateFilter && (
-                <Button variant="outline" size="sm" onClick={() => setDateFilter("")}>
-                  Clear date filter
+              error && !forbidden ? (
+                <Button variant="outline" size="sm" onClick={refetch}>
+                  Try again
                 </Button>
+              ) : (
+                dateFilter && (
+                  <Button variant="outline" size="sm" onClick={() => handleDateChange("")}>
+                    Clear date filter
+                  </Button>
+                )
               )
             }
           />
@@ -210,10 +217,10 @@ const AttendanceReport = () => {
             <div className="flex justify-center">
               <Button
                 variant="outline"
-                onClick={() => setSkip((prev) => prev + PAGE_SIZE)}
-                loading={loading}
+                onClick={() => setPage((prev) => prev + 1)}
+                loading={isFetching}
               >
-                {!loading && <LuChevronDown className="h-4 w-4" aria-hidden="true" />}
+                {!isFetching && <LuChevronDown className="h-4 w-4" aria-hidden="true" />}
                 Load more days
               </Button>
             </div>

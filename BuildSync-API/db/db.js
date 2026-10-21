@@ -30,7 +30,11 @@ export const connectToDatabase = async () => {
 
   try {
     await mongoose.connect(url, {
-      serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 10000,
+      // Both names are accepted so either deployment's `.env` keeps working.
+      serverSelectionTimeoutMS:
+        Number(process.env.MONGO_TIMEOUT_MS) ||
+        Number(process.env.DB_SERVER_SELECTION_TIMEOUT_MS) ||
+        10000,
     });
     console.log(`MongoDB connected: ${redact(url)}`);
     return mongoose.connection;

@@ -5,7 +5,11 @@ import AuthLayout from "../components/layout/AuthLayout";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Form";
 import { Alert } from "../components/ui/Feedback";
-import { api, getErrorMessage } from "../lib/api";
+import { getErrorMessage } from "../lib/api";
+import {
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
+} from "../services/api/endpoints/authApi";
 
 const ForgotPassword = () => {
   const [step, setStep] = useState("request"); // "request" | "reset"
@@ -14,24 +18,22 @@ const ForgotPassword = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  const [requestReset, { isLoading: requesting }] = useForgotPasswordMutation();
+  const [resetPassword, { isLoading: resetting }] = useResetPasswordMutation();
+  const loading = requesting || resetting;
 
   const handleRequestReset = async (event) => {
     event.preventDefault();
     setError(null);
-    setLoading(true);
     try {
-      const { data } = await api.post("/auth/forgot-password", { email });
-      if (data.success) {
-        setResetToken(data.resetToken);
-        setStep("reset");
-      }
+      const { resetToken: token } = await requestReset({ email }).unwrap();
+      setResetToken(token);
+      setStep("reset");
     } catch (err) {
       setError(getErrorMessage(err, "Unable to process the request."));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -44,17 +46,11 @@ const ForgotPassword = () => {
       return;
     }
 
-    setLoading(true);
     try {
-      const { data } = await api.post("/auth/reset-password", {
-        resetToken,
-        newPassword,
-      });
-      if (data.success) navigate("/login", { replace: true });
+      await resetPassword({ resetToken, newPassword }).unwrap();
+      navigate("/login", { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Unable to reset the password."));
-    } finally {
-      setLoading(false);
     }
   };
 

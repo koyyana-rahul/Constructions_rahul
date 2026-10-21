@@ -47,7 +47,12 @@ export const authApi = baseApi.injectEndpoints({
 
     forgotPassword: builder.mutation({
       query: (body) => ({ url: "/auth/forgot-password", method: "POST", body }),
-      transformResponse: (res) => res?.message ?? "Password reset link sent.",
+      // `resetToken` is returned so the two-step form can carry it straight
+      // into /auth/reset-password without a second round trip.
+      transformResponse: (res) => ({
+        message: res?.message ?? "Password reset link sent.",
+        resetToken: res?.resetToken ?? null,
+      }),
     }),
 
     resetPassword: builder.mutation({
@@ -57,8 +62,12 @@ export const authApi = baseApi.injectEndpoints({
 
     verifyActivationToken: builder.query({
       query: (token) => ({ url: "/auth/activate", method: "GET", params: { token } }),
+      // Only the identity fields the activation form displays. The server
+      // never returns the token itself or any credential material.
       transformResponse: (res) => ({
+        name: res?.name ?? res?.user?.name ?? null,
         email: res?.email ?? res?.user?.email ?? null,
+        expiresAt: res?.expiresAt ?? null,
         valid: Boolean(res?.valid ?? res?.success),
       }),
     }),

@@ -22,6 +22,7 @@ const EditEmployee = () => {
     salary: "",
     department: "",
   });
+  const [seeded, setSeeded] = useState(false);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
 
@@ -41,9 +42,14 @@ const EditEmployee = () => {
    *
    * `department` comes back populated as an object; the update endpoint
    * expects the raw id.
+   *
+   * The `seeded` guard matters: RTK Query can refetch the record in the
+   * background (focus, reconnect). Re-seeding on every refetch would wipe
+   * whatever the administrator had already typed.
    */
   useEffect(() => {
-    if (!record) return;
+    if (!record || seeded) return;
+    setSeeded(true);
     setEmployee({
       name: record.userId?.name || "",
       maritalStatus: record.maritalStatus || "",
@@ -54,7 +60,7 @@ const EditEmployee = () => {
           ? record.department._id
           : record.department || "",
     });
-  }, [record]);
+  }, [record, seeded]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;

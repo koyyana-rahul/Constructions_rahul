@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuUser,
@@ -109,7 +109,22 @@ const AddEmployee = () => {
     }
   };
 
-  const preview = formData.image ? URL.createObjectURL(formData.image) : null;
+  /**
+   * Object URLs are a scarce browser resource - each one pins the blob in
+   * memory until it is explicitly revoked. Memoising the URL means one is
+   * created per selected file (not one per render), and the effect revokes
+   * it when the file changes or the form unmounts.
+   */
+  const preview = useMemo(
+    () => (formData.image ? URL.createObjectURL(formData.image) : null),
+    [formData.image]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   return (
     <FormPage

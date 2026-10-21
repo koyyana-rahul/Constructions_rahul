@@ -21,10 +21,13 @@ const start = async () => {
    */
   server.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
+      // Suggest an actual free port. The previous message hardcoded 5050, so
+      // anyone already running on 5050 was told to "set PORT=5050".
+      const suggestion = port === 5000 ? 5050 : port + 1;
       console.error(
         `\nPort ${port} is already in use.\n` +
           `Another copy of the API is already running. Stop it first, or run on a\n` +
-          `different port:  set PORT=5050 and restart.\n`
+          `different port:  set PORT=${suggestion} and restart.\n`,
       );
       process.exit(1);
     }

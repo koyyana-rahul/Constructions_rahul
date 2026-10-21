@@ -33,7 +33,13 @@ const PrivateRoutes = ({ allowed }) => {
   if (status === "unknown") return <PageLoader label="Checking your session" />;
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // `allowed` rides along so the login form can decide whether the visitor
+    // who was deep-linked into a protected page may actually land there.
+    // Without it, a client who follows a link to /admin-dashboard would be
+    // bounced to a page they cannot use and shown a confusing redirect.
+    return (
+      <Navigate to="/login" replace state={{ from: location.pathname, allowed }} />
+    );
   }
 
   if (Array.isArray(allowed) && !allowed.includes(user.role)) {
