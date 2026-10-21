@@ -3,7 +3,7 @@ import { useAppDispatch } from "./hooks";
 import { useVerifySessionQuery } from "../services/api/endpoints/authApi";
 import { sessionAuthenticated, sessionAnonymous, sessionCleared } from "../features/auth/authSlice";
 import { baseApi } from "../services/api/baseApi";
-import { hasToken, SESSION_EXPIRED_EVENT } from "../lib/api";
+import { hasSessionHint, SESSION_EXPIRED_EVENT } from "../lib/api";
 
 /**
  * Session bootstrap.
@@ -24,7 +24,7 @@ import { hasToken, SESSION_EXPIRED_EVENT } from "../lib/api";
  */
 const SessionWatcher = () => {
   const dispatch = useAppDispatch();
-  const hadToken = useRef(hasToken());
+  const hadToken = useRef(hasSessionHint());
 
   const {
     data: user,

@@ -39,7 +39,7 @@ const ChatForm = ({ chatHistory, setChatHistory, generateBotResponse }) => {
     >
       <input
         ref={inputRef}
-        placeholder="Ask about BuildSync…"
+        placeholder="Ask Benny about your projects…"
         aria-label="Message"
         disabled={sending}
         className="min-w-0 flex-1 rounded-md border border-concrete-300 px-3 py-2 text-sm text-navy-900 placeholder:text-concrete-400 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-400 disabled:bg-concrete-100"

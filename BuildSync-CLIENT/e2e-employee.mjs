@@ -14,11 +14,19 @@ export default async function run(page) {
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await page.waitForURL(/dashboard/, { timeout: 20000 });
 
-  // Grab two real employee ids from thSe API.
+  // Grab two real employee ids from the API.
+  // The session token lives in an httpOnly cookie, so the browser attaches it
+  // automatically - the script must ask for credentials to be included and
+  // must NOT try to read the token (it cannot).
   const ids = await page.evaluate(async () => {
-    const t = localStorage.getItem("token");
+    const csrf = document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("builtra_csrf="))
+      ?.split("=")[1];
     const r = await fetch("http://localhost:5050/api/employee?limit=100", {
-      headers: { Authorization: "Bearer " + t },
+      credentials: "include",
+      headers: csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {},
     });
     const j = await r.json();
     return (j.employees || []).slice(0, 2).map((e) => ({

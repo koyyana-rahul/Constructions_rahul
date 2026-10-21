@@ -1,5 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { clearToken } from "../../lib/api";
+import { clearSessionHint } from "../../lib/api";
 
 /**
  * Authenticated session state - the single source of truth for "who is signed
@@ -9,9 +9,9 @@ import { clearToken } from "../../lib/api";
  * both would give the app two competing answers, so the context is gone and
  * every consumer reads this slice.
  *
- * The JWT itself is deliberately NOT in Redux. Tokens stay in localStorage
- * (unchanged from before) and are attached per request by the Axios client, so
- * credentials never enter serialisable UI state or the DevTools timeline.
+ * The JWT itself is deliberately NOT in Redux and NOT in localStorage. It lives in
+ * an httpOnly cookie that JavaScript cannot read, so no injected script can
+ * exfiltrate it. The slice only records WHO is signed in.
  *
  * `status` matters for route guards:
  *   - "unknown"     -> we have not asked the server yet; render nothing
@@ -43,7 +43,7 @@ const authSlice = createSlice({
     },
     /** Clears the slice and the stored token. Used by sign-out and by a 401. */
     sessionCleared(state) {
-      clearToken();
+      clearSessionHint();
       state.user = null;
       state.status = "anonymous";
     },

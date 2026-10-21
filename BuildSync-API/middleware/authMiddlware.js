@@ -1,34 +1,45 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { AUTH_COOKIE, parseCookies } from "../utils/cookies.js";
 
 /**
- * Authenticates the request from the bearer token and attaches the live user
- * document to `req.user`.
+ * Authenticates the request and attaches the live user document to `req.user`.
  *
- * Changes from the previous version:
- *  - a missing/malformed Authorization header returns 401 instead of throwing
- *    (which previously surfaced as a 500 HTML page);
- *  - every authentication failure uses 401, reserving 403 for authorization;
- *  - an explicitly disabled account is rejected.
+ * The token is read from the httpOnly session cookie FIRST, then from an
+ * `Authorization: Bearer` header.
+ *
+ * Why the cookie comes first: the browser attaches it automatically, which
+ * is what lets the frontend stop holding the token in `localStorage` where
+ * any injected script could read it. The Bearer header is kept as a
+ * supported alternative for scripts, the test suite and any server-to-server
+ * caller - a bearer token is never sent automatically, so it cannot be used
+ * for CSRF.
+ *
+ * `req.authVia` records which one was used, because the CSRF check only
+ * applies to cookie-authenticated requests.
+ *
+ * Every authentication failure uses 401; 403 is reserved for authorization.
  */
 const authenticate = async (req, res, next) => {
   const header = req.headers.authorization || "";
+  const cookies = parseCookies(req.headers.cookie);
 
-  if (!header) {
+  let token = cookies[AUTH_COOKIE] || null;
+  let authVia = "cookie";
+
+  if (!token) {
+    const [scheme, bearer] = header.split(" ");
+    if (scheme === "Bearer" && bearer) {
+      token = bearer;
+      authVia = "bearer";
+    }
+  }
+
+  if (!token) {
     return res.status(401).json({
       success: false,
       error: "Authentication required",
       code: "NO_TOKEN",
-    });
-  }
-
-  const [scheme, token] = header.split(" ");
-
-  if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({
-      success: false,
-      error: "Malformed authorization header. Expected 'Bearer <token>'",
-      code: "BAD_TOKEN",
     });
   }
 
@@ -67,6 +78,7 @@ const authenticate = async (req, res, next) => {
     // of truth so a role change takes effect immediately.
     req.user = user;
     req.token = token;
+    req.authVia = authVia;
     return next();
   } catch (error) {
     console.error("authenticate:", error.message);

@@ -8,7 +8,7 @@ import { createSlice } from "@reduxjs/toolkit";
  * keystroke dispatched through the store.
  */
 
-const SIDEBAR_COLLAPSE_KEY = "buildsync:sidebar-collapsed";
+const SIDEBAR_COLLAPSE_KEY = "builtra:sidebar-collapsed";
 
 const readStoredCollapse = () => {
   try {

@@ -1,5 +1,5 @@
 /**
- * End-to-end API smoke test against a RUNNING BuildSync API.
+ * End-to-end API smoke test against a RUNNING Builtra API.
  *
  * Exercises every endpoint the repaired frontend calls, as each of the three
  * roles, and prints a pass/fail matrix. Run it while the API is up:

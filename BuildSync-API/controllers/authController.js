@@ -12,6 +12,7 @@ import {
   isExpired,
 } from "../services/activationService.js";
 import { body, validationResult } from "express-validator";
+import { issueSessionCookies, clearSessionCookies } from "../utils/cookies.js";
 
 const PASSWORD_STRENGTH_MESSAGE =
   "Password must be at least 8 characters long and contain one uppercase letter, one lowercase letter, one number and one special character";
@@ -249,6 +250,15 @@ const login = async (req, res) => {
       { expiresIn: "1d" }
     );
 
+    /**
+     * The token is handed to the browser as an httpOnly cookie, not in the
+     * JSON body. JavaScript cannot read it, so an XSS flaw cannot exfiltrate
+     * the session. The response body still carries the token so that
+     * non-browser API clients (scripts, the test suite) can keep using the
+     * `Authorization: Bearer` header.
+     */
+    issueSessionCookies(req, res, token);
+
     return res
       .status(200)
       .json({
@@ -260,6 +270,17 @@ const login = async (req, res) => {
     console.error("[login]", error.message);
     res.status(500).json({ success: false, error: "Server error" });
   }
+};
+
+/**
+ * Ends the session.
+ *
+ * Clearing the cookie is what actually signs the user out - the JWT itself
+ * is stateless, so the cookie is the only thing that has to be destroyed.
+ */
+const logout = async (req, res) => {
+  clearSessionCookies(req, res);
+  return res.status(200).json({ success: true, message: "Signed out" });
 };
 
 const verify = (req, res) => {
@@ -335,6 +356,7 @@ export {
   resendInvitation,
   verifyActivationToken,
   login,
+  logout,
   verify,
   forgotPassword,
   resetPassword,

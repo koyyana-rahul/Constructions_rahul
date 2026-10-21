@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
-import { LuHardHat, LuChevronsLeft, LuX } from "react-icons/lu";
+import { LuChevronsLeft, LuX } from "react-icons/lu";
+import { BrandMark, BrandWordmark } from "../brand/Logo";
 
 const linkClasses = ({ isActive }) =>
   `group relative flex items-center gap-3 rounded-md px-3 py-2.5 font-display text-sm font-medium uppercase tracking-wide transition-colors duration-150 ${
@@ -46,13 +47,9 @@ const Sidebar = ({
             collapsed ? "lg:justify-center lg:px-0" : "gap-3 px-5"
           } px-5`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-600">
-            <LuHardHat className="h-5 w-5 text-white" aria-hidden="true" />
-          </span>
+          <BrandMark className="h-9 w-9" />
           <div className={`min-w-0 ${collapsed ? "lg:hidden" : ""}`}>
-            <p className="truncate font-display text-lg font-semibold uppercase leading-none tracking-wider text-white">
-              Build<span className="text-accent-400">Sync</span>
-            </p>
+            <BrandWordmark className="text-lg" variant="onDark" />
             <p className="mt-0.5 truncate font-display text-2xs uppercase tracking-[0.18em] text-navy-300">
               Construction Ops
             </p>

@@ -1,4 +1,6 @@
-import { LuHardHat, LuShieldCheck, LuHardDrive } from "react-icons/lu";
+import { LuShieldCheck, LuHardDrive, LuCalendarCheck } from "react-icons/lu";
+import { BrandMark, BrandSymbol, BrandWordmark } from "../brand/Logo";
+import { APP_NAME, APP_TAGLINE } from "../../lib/brand";
 
 /**
  * Split auth layout. The left panel carries the construction brand identity,
@@ -29,13 +31,9 @@ const AuthLayout = ({ children, title, subtitle, aside }) => (
       />
 
       <div className="relative flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-accent-600">
-          <LuHardHat className="h-6 w-6 text-white" aria-hidden="true" />
-        </span>
+        <BrandMark className="h-10 w-10" />
         <div>
-          <p className="font-display text-xl font-semibold uppercase leading-none tracking-wider text-white">
-            Build<span className="text-accent-400">Sync</span>
-          </p>
+          <BrandWordmark className="text-xl" variant="onDark" />
           <p className="mt-0.5 font-display text-2xs uppercase tracking-[0.2em] text-navy-300">
             Construction Operations
           </p>
@@ -44,11 +42,9 @@ const AuthLayout = ({ children, title, subtitle, aside }) => (
 
       <div className="relative max-w-md">
         <h2 className="font-display text-4xl font-semibold uppercase leading-[1.1] tracking-wide text-white xl:text-5xl">
-          Run every site,
+          From plans
           <br />
-          <span className="text-accent-400">workforce and request</span>
-          <br />
-          from one platform.
+          <span className="text-accent-400">to progress.</span>
         </h2>
         <p className="mt-5 text-sm leading-relaxed text-navy-200">
           Attendance, leave, work requests, salary and client visibility for construction
@@ -59,7 +55,7 @@ const AuthLayout = ({ children, title, subtitle, aside }) => (
           {[
             { icon: LuHardDrive, label: "Site Records" },
             { icon: LuShieldCheck, label: "Role Access" },
-            { icon: LuHardHat, label: "Crew Tracking" },
+            { icon: LuCalendarCheck, label: "Crew Tracking" },
           ].map(({ icon: Icon, label }) => (
             <div key={label}>
               <Icon className="h-5 w-5 text-accent-400" aria-hidden="true" />
@@ -71,8 +67,11 @@ const AuthLayout = ({ children, title, subtitle, aside }) => (
         </dl>
       </div>
 
-      <p className="relative text-xs text-navy-400">
-        &copy; {new Date().getFullYear()} BuildSync. All rights reserved.
+      <p className="relative flex items-center gap-2 text-xs text-navy-400">
+        <BrandSymbol className="h-3.5 w-3.5" variant="light" />
+        <span>
+          &copy; {new Date().getFullYear()} {APP_NAME}. {APP_TAGLINE}
+        </span>
       </p>
     </aside>
 
@@ -81,12 +80,8 @@ const AuthLayout = ({ children, title, subtitle, aside }) => (
       <div className="w-full max-w-md">
         {/* Mobile brand mark */}
         <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-accent-600">
-            <LuHardHat className="h-6 w-6 text-white" aria-hidden="true" />
-          </span>
-          <p className="font-display text-xl font-semibold uppercase tracking-wider text-navy-900">
-            Build<span className="text-accent-600">Sync</span>
-          </p>
+          <BrandMark className="h-10 w-10" />
+          <BrandWordmark className="text-xl" variant="onLight" />
         </div>
 
         <header className="mb-6">

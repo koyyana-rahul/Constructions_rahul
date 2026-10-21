@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512" role="img" aria-label="Builtra">
+  <title>Builtra</title>
+  <rect width="32" height="32" rx="7" fill="#172554"/>
+  <g fill="#FFFFFF">
+    <path d="M11 4h13a6 6 0 0 1 0 12H11z"/>
+    <path d="M11 16h14a6 6 0 0 1 0 12H11z"/>
+    <rect x="4" y="4" width="7" height="24" rx="2.5"/>
+  </g>
+  <rect x="24" y="4" width="4" height="12" rx="2" fill="#F97316"/>
+</svg>

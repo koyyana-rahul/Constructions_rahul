@@ -1,7 +1,7 @@
 import axios from "axios";
 
 /**
- * Single source of truth for the backend origin and the bearer token.
+ * Single source of truth for the backend origin and the session.
  *
  * Every endpoint path is unchanged - this only removes the duplicated
  * hardcoded "http://localhost:5000/api/..." strings that were scattered
@@ -25,54 +25,95 @@ export const assetUrl = (filename) => {
   return `${API_ORIGIN}/${String(filename).replace(/^\/+/, "")}`;
 };
 
-/* ------------------------------------------------------------------ Token */
-
-export const TOKEN_KEY = "buildsync:token";
-
-export const getToken = () => {
-  try {
-    return localStorage.getItem(TOKEN_KEY) ?? localStorage.getItem("token");
-  } catch {
-    return null;
-  }
-};
+/* ------------------------------------------------------------------ Session */
 
 /**
- * The legacy `token` key is what the previous AuthContext read. Both are
- * written on sign-in so a stale key can never point at a cleared session.
+ * The session token lives in an httpOnly cookie, so JavaScript cannot read
+ * it. `localStorage` and `sessionStorage` are both deliberately unused for
+ * credentials: anything a script can read, a script can steal.
+ *
+ * The browser attaches the cookie automatically. All the client has to do is
+ * send the request WITH credentials so the browser includes it on a
+ * cross-origin call.
  */
-export const setToken = (token) => {
+export const CSRF_COOKIE = "builtra_csrf";
+
+/**
+ * A non-sensitive hint that a session probably exists.
+ *
+ * The client cannot inspect the httpOnly cookie, so it needs some way to
+ * avoid asking the server "who am I?" on every page load for a visitor who
+ * is simply signed out. This holds NO credential - it is a boolean the
+ * server re-checks with `GET /auth/verify` before anything is trusted.
+ */
+const SESSION_HINT_KEY = "builtra:session";
+
+export const hasSessionHint = () => {
   try {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem("token", token);
+    return localStorage.getItem(SESSION_HINT_KEY) === "1";
   } catch {
-    /* storage unavailable - the session simply will not survive a refresh */
+    return false;
   }
 };
 
-export const clearToken = () => {
+export const setSessionHint = () => {
   try {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem("token");
+    localStorage.setItem(SESSION_HINT_KEY, "1");
+  } catch {
+    /* storage unavailable - the session still works, it just re-verifies */
+  }
+};
+
+export const clearSessionHint = () => {
+  try {
+    localStorage.removeItem(SESSION_HINT_KEY);
   } catch {
     /* nothing to clear */
   }
 };
 
-export const hasToken = () => Boolean(getToken());
+/** Reads a cookie by name. Only used for the CSRF token, which is readable by design. */
+const readCookie = (name) => {
+  if (typeof document === "undefined") return null;
+  for (const part of document.cookie.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 1) continue;
+    if (part.slice(0, eq).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      return part.slice(eq + 1).trim();
+    }
+  }
+  return null;
+};
+
+export const getCsrfToken = () => readCookie(CSRF_COOKIE);
+
+/** True when the browser holds what looks like a session. */
+export const hasToken = hasSessionHint;
 
 /* ---------------------------------------------------------- Axios client */
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
+  // REQUIRED: without this the browser refuses to attach the session cookie
+  // to a cross-origin request, and every call comes back unauthenticated.
+  withCredentials: true,
 });
 
+const SAFE_METHODS = new Set(["get", "head", "options"]);
+
 api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const method = (config.method || "get").toLowerCase();
+
+  // Double-submit CSRF token on every state-changing request.
+  if (!SAFE_METHODS.has(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) config.headers["X-CSRF-Token"] = csrf;
   }
+
   return config;
 });
 
@@ -83,7 +124,7 @@ api.interceptors.request.use((config) => {
  * server decision about *this* request, not proof that the token is invalid -
  * signing out on it would destroy a perfectly valid session.
  */
-export const SESSION_EXPIRED_EVENT = "buildsync:session-expired";
+export const SESSION_EXPIRED_EVENT = "builtra:session-expired";
 
 export const notifySessionExpired = () => {
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
@@ -94,7 +135,7 @@ export const notifySessionExpired = () => {
  * expired". Signing the user out after a mistyped password would destroy a
  * perfectly valid session and bounce them to the login screen for no reason.
  */
-const CREDENTIAL_ENDPOINTS = /\/auth\/(login|forgot-password|reset-password|activate)/;
+const CREDENTIAL_ENDPOINTS = /\/auth\/(login|logout|forgot-password|reset-password|activate|setup-password)/;
 
 api.interceptors.response.use(
   (response) => response,
@@ -103,9 +144,9 @@ api.interceptors.response.use(
     const isCredentialCheck = CREDENTIAL_ENDPOINTS.test(error?.config?.url || "");
 
     if (status === 401 && !isCredentialCheck) {
-      // Expired or revoked token - clear it so the app returns to a clean
-      // signed-out state instead of looping on failing requests.
-      clearToken();
+      // Expired or revoked session - tell the app to return to a signed-out
+      // state instead of looping on failing requests.
+      clearSessionHint();
       notifySessionExpired();
     }
     return Promise.reject(error);

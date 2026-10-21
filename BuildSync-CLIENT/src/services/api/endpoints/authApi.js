@@ -1,5 +1,5 @@
 import { baseApi, TAGS } from "../baseApi";
-import { setToken } from "../../../lib/api";
+import { setSessionHint } from "../../../lib/api";
 import { sessionAuthenticated } from "../../../features/auth/authSlice";
 
 /**
@@ -36,7 +36,7 @@ export const authApi = baseApi.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           if (data?.token) {
-            setToken(data.token);
+            setSessionHint();
             dispatch(sessionAuthenticated(data.user));
           }
         } catch {
@@ -77,6 +77,15 @@ export const authApi = baseApi.injectEndpoints({
       transformResponse: (res) => res?.message ?? "Account activated.",
     }),
 
+    /**
+     * Sign-out. The server clears the httpOnly session cookie - this is what
+     * actually ends the session.
+     */
+    logout: builder.mutation({
+      query: () => ({ url: "/auth/logout", method: "POST" }),
+      transformResponse: (res) => res?.message ?? "Signed out",
+    }),
+
     resendInvitation: builder.mutation({
       query: (userId) => ({
         url: `/auth/invitations/${userId}/resend`,
@@ -95,5 +104,6 @@ export const {
   useResetPasswordMutation,
   useVerifyActivationTokenQuery,
   useActivateAccountMutation,
+  useLogoutMutation,
   useResendInvitationMutation,
 } = authApi;

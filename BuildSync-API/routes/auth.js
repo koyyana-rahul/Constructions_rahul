@@ -2,6 +2,7 @@ import express from "express";
 import {
   activate,
   login,
+  logout,
   verify,
   forgotPassword,
   resetPassword,
@@ -45,6 +46,9 @@ router.post("/activate", asyncHandler(activate));
 router.get("/activate", asyncHandler(verifyActivationToken));
 
 router.get("/verify", authenticate, asyncHandler(verify));
+
+// Sign-out: clears the httpOnly session cookie.
+router.post("/logout", asyncHandler(logout));
 
 // Re-issue an invitation link (administrators only).
 router.post(

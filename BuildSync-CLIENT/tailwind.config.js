@@ -13,19 +13,28 @@ export default {
     },
     extend: {
       colors: {
-        // Deep navy - primary brand surface (sidebar, topbar, headings)
+        /**
+         * Builtra brand navy.
+         *
+         * navy-900 is the primary brand colour (#172554) and carries the
+         * sidebar, topbar and primary headings. navy-800 is the secondary
+         * navy (#1E3A5F) used for hover and raised surfaces.
+         *
+         * The scale is monotonic from lightest (50) to darkest (950) so
+         * `navy-700` is always lighter than `navy-800`.
+         */
         navy: {
-          50: "#F2F5F9",
-          100: "#E1E8F1",
-          200: "#C3D0E2",
-          300: "#93A9C6",
-          400: "#5C7CA5",
-          500: "#395A85",
-          600: "#27456B",
-          700: "#1D3453",
-          800: "#152740",
-          900: "#0F1D33",
-          950: "#0A1526",
+          50: "#F1F5FB",
+          100: "#E2E9F6",
+          200: "#C4D0E9",
+          300: "#94A8D4",
+          400: "#5F7AB8",
+          500: "#3D5A9A",
+          600: "#2C447B",
+          700: "#23386A",
+          800: "#1E3A5F", // secondary navy
+          900: "#172554", // primary brand navy
+          950: "#0E1935",
         },
         // Concrete - neutral surface + text scale
         concrete: {
@@ -111,13 +120,14 @@ export default {
       },
       boxShadow: {
         // Layered, low-spread elevation - avoids the generic "big blurry shadow".
-        card: "0 1px 2px 0 rgb(15 29 51 / 0.04), 0 1px 3px 0 rgb(15 29 51 / 0.06)",
+        // The tint matches the brand navy so shadows never read as grey haze.
+        card: "0 1px 2px 0 rgb(23 37 84 / 0.04), 0 1px 3px 0 rgb(23 37 84 / 0.06)",
         "card-hover":
-          "0 4px 6px -1px rgb(15 29 51 / 0.07), 0 2px 4px -2px rgb(15 29 51 / 0.05)",
+          "0 4px 6px -1px rgb(23 37 84 / 0.07), 0 2px 4px -2px rgb(23 37 84 / 0.05)",
         popover:
-          "0 10px 15px -3px rgb(15 29 51 / 0.10), 0 4px 6px -4px rgb(15 29 51 / 0.10)",
-        sidebar: "0 0 0 1px rgb(15 29 51 / 0.04)",
-        inset: "inset 0 1px 2px 0 rgb(15 29 51 / 0.06)",
+          "0 10px 15px -3px rgb(23 37 84 / 0.10), 0 4px 6px -4px rgb(23 37 84 / 0.10)",
+        sidebar: "0 0 0 1px rgb(23 37 84 / 0.04)",
+        inset: "inset 0 1px 2px 0 rgb(23 37 84 / 0.06)",
       },
       keyframes: {
         "fade-in": {

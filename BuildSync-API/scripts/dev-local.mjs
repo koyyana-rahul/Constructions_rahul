@@ -20,14 +20,14 @@ const replSet = await MongoMemoryReplSet.create({
   replSet: { count: 1, storageEngine: "wiredTiger" },
 });
 
-process.env.MONGODB_URL = replSet.getUri("buildsync");
+process.env.MONGODB_URL = replSet.getUri("builtra");
 process.env.JWT_SECRET =
   process.env.JWT_SECRET && process.env.JWT_SECRET !== "your_secure_jwt_secret"
     ? process.env.JWT_SECRET
-    : "buildsync-local-dev-secret-not-for-production";
+    : "builtra-local-dev-secret-not-for-production";
 
 console.log("\n────────────────────────────────────────────────────────────");
-console.log("  BuildSync - local development stack");
+console.log("  Builtra - local development stack");
 console.log("────────────────────────────────────────────────────────────");
 console.log(`  MongoDB : in-memory (temporary) at ${process.env.MONGODB_URL}`);
 console.log(`  API     : http://localhost:${PORT}/api`);

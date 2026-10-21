@@ -1,5 +1,5 @@
 /**
- * BuildSync data migration.
+ * Builtra data migration.
  *
  * Idempotent and non-destructive by default: every step is safe to re-run and
  * only reports what it would do under `--dry-run`.

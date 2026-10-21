@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import path from "path";
 
 /**
  * Test harness.
@@ -33,6 +34,22 @@ const deriveTestUrl = (url) => {
   return u.toString();
 };
 
+/**
+ * Each test FILE gets its own database.
+ *
+ * `node --test` runs test files in parallel, each in its own process, but
+ * they all share one MONGODB_URL. Without this suffix two files would use the
+ * same database, and one file's `dropDatabase()` in `after()` would delete
+ * another file's fixtures mid-run - producing failures that have nothing to
+ * do with the code being tested.
+ */
+const testFileSuffix = () => {
+  const file = process.argv[1] || "";
+  const base = path.basename(file).replace(/\.test\.[cm]?js$/, "");
+  const safe = base.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+  return safe && safe !== "index" ? safe : null;
+};
+
 /** In-memory server handle, kept so it can be stopped after the run. */
 let memoryServer = null;
 
@@ -56,8 +73,19 @@ export const connectTestDb = async () => {
     return;
   }
 
-  const url =
+  const base =
     process.env.TEST_MONGODB_URL || deriveTestUrl(process.env.MONGODB_URL);
+
+  // Insert a per-file suffix so parallel test files cannot collide.
+  const suffix = testFileSuffix();
+  let url = base;
+  if (suffix) {
+    const u = new URL(base);
+    const dbName = u.pathname.replace(/^\//, "").replace(/_test$/, "");
+    u.pathname = `/${dbName}_${suffix}_test`;
+    url = u.toString();
+  }
+
   const timeout = Number(process.env.TEST_DB_TIMEOUT_MS) || 5000;
 
   try {
@@ -118,6 +146,68 @@ export const api = async (method, path, { token, body } = {}) => {
     /* non-JSON response */
   }
   return { status: res.status, body: json };
+};
+
+/**
+ * Cookie-aware request helper.
+ *
+ * Mirrors what a browser does: it keeps the cookies it was given and sends
+ * them back on the next request. `setCookie` returns the raw `Set-Cookie`
+ * headers so a test can assert on `HttpOnly`, `SameSite` and `Path`.
+ */
+export const browser = () => {
+  const jar = new Map();
+
+  const cookieHeader = () =>
+    [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+
+  const capture = (res) => {
+    const raw = res.headers.getSetCookie?.() ?? [];
+    for (const line of raw) {
+      const [pair] = line.split(";");
+      const eq = pair.indexOf("=");
+      if (eq < 1) continue;
+      const name = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
+      // An empty value with an expiry in the past is a deletion.
+      if (value === "" || /Expires=Thu, 01 Jan 1970/i.test(line)) jar.delete(name);
+      else jar.set(name, value);
+    }
+    return raw;
+  };
+
+  const request = async (method, path, { body, csrf = true, headers: extra = {} } = {}) => {
+    const headers = { "Content-Type": "application/json", ...extra };
+    const cookies = cookieHeader();
+    if (cookies) headers.Cookie = cookies;
+
+    // The double-submit CSRF token, exactly as the frontend sends it.
+    if (csrf && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+      const csrfCookie = jar.get("builtra_csrf");
+      if (csrfCookie) headers["X-CSRF-Token"] = decodeURIComponent(csrfCookie);
+    }
+
+    const res = await fetch(baseUrl + path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const setCookie = capture(res);
+    let json = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* non-JSON response */
+    }
+    return { status: res.status, body: json, setCookie, jar };
+  };
+
+  return {
+    request,
+    jar,
+    cookieHeader,
+  };
 };
 
 export const loginAs = async (email, password = "Test!Pass123") => {

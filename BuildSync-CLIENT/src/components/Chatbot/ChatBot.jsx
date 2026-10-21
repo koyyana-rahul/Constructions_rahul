@@ -3,7 +3,7 @@ import { LuMessageSquare, LuX, LuRefreshCw, LuChevronDown } from "react-icons/lu
 import ChatbotIcon from "./ChatbotIcon";
 import ChatForm from "./ChatForm";
 import ChatMessage from "./ChatMessage";
-import { companyInfo } from "./CompanyInfo";
+import { assistantIntro } from "./CompanyInfo";
 
 const GREETING = "Hey there 👋\nHow can I help you today?";
 
@@ -11,7 +11,7 @@ const Chatbot = () => {
   const chatBodyRef = useRef(null);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatHistory, setChatHistory] = useState([
-    { hideInChat: true, role: "model", text: companyInfo },
+    { hideInChat: true, role: "model", text: assistantIntro },
   ]);
 
   const generateBotResponse = async (history) => {
@@ -76,7 +76,7 @@ const Chatbot = () => {
             : "pointer-events-none translate-y-3 opacity-0"
         }`}
         role="dialog"
-        aria-label="BuildSync support assistant"
+        aria-label="Benny, the Builtra assistant"
         aria-hidden={!showChatbot}
       >
         <div className="flex items-center justify-between border-b border-navy-800 bg-navy-900 px-4 py-3">
@@ -84,10 +84,10 @@ const Chatbot = () => {
             <ChatbotIcon />
             <div>
               <p className="font-display text-sm font-semibold uppercase tracking-wide text-white">
-                Site Assistant
+                Benny
               </p>
               <p className="font-display text-2xs uppercase tracking-wider text-navy-300">
-                BuildSync support
+                Builtra Assistant
               </p>
             </div>
           </div>

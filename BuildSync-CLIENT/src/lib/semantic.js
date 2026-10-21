@@ -1,5 +1,5 @@
 /**
- * Semantic colour tokens - the single source of truth for BuildSync.
+ * Semantic colour tokens - the single source of truth for Builtra.
  *
  * Root cause this file exists to fix: every component used to carry its own
  * private colour map (Button.VARIANTS, Badge.TONES, Badge.DOT_TONES,
@@ -22,7 +22,7 @@
  *  - `soft` / `text` / `ring` - badge and alert surfaces.
  *
  * APPLICATION CONVENTION (do not "fix" this in isolation):
- * BuildSync uses construction orange (accent) for ACTIONS and semantic colour
+ * Builtra uses construction orange (accent) for ACTIONS and semantic colour
  * for STATES. "Approve request" is deliberately an accent button, because it is
  * something the admin does; the resulting APPROVED badge is success green,
  * because that is where the record now stands. Orange is therefore not a bug to
