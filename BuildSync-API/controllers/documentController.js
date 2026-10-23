@@ -198,8 +198,10 @@ export const uploadDocument = async (req, res) => {
     cloudinaryUrl = await uploadFileFromMulter(req, "file");
   } catch (uploadError) {
     console.error("Cloudinary upload failed, falling back to local storage:", uploadError.message);
-    // Keep the local filename as fallback
-    cloudinaryUrl = req.file.path;
+    // Keep the local filename (basename only) as fallback
+    // req.file.path is the full path; we need just the basename for the test
+    // and for consistency with the PRIVATE_DOCUMENT_DIR join pattern
+    cloudinaryUrl = path.basename(req.file.path);
   }
 
   const document = await DocumentFile.create({
