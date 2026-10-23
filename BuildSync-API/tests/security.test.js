@@ -115,6 +115,9 @@ describe("password change (R0)", () => {
 
     // The client's password is the new one.
     assert.notEqual(await loginAs("cli@test.local", "Moved!On99"), null);
+    // A password change revokes the old token; refresh it for the remaining
+    // suites that use this shared fixture token.
+    cliT = await loginAs("cli@test.local", "Moved!On99");
   });
 
   it("rejects a wrong current password", async () => {
@@ -144,6 +147,71 @@ describe("password change (R0)", () => {
     });
     assert.equal(allowed.status, 200);
     assert.notEqual(await loginAs("emp@test.local", "Reset!2345"), null);
+    // The administrative reset signed out the employee's old token.
+    empT = await loginAs("emp@test.local", "Reset!2345");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Self-service password reset                                          */
+/* ------------------------------------------------------------------ */
+describe("self-service password reset", () => {
+  it("does not reveal account existence or return a reset token", async () => {
+    const known = await api("POST", "/auth/forgot-password", {
+      body: { email: "admin@test.local" },
+    });
+    const unknown = await api("POST", "/auth/forgot-password", {
+      body: { email: "does-not-exist@test.local" },
+    });
+
+    assert.equal(known.status, 200);
+    assert.equal(unknown.status, 200);
+    assert.equal(known.body.message, unknown.body.message);
+    assert.equal(known.body.resetToken, undefined);
+    assert.equal(unknown.body.resetToken, undefined);
+  });
+
+  it("accepts a valid reset token once and revokes old sessions", async () => {
+    const crypto = (await import("crypto")).default;
+    const raw = crypto.randomBytes(32).toString("hex");
+    const oldCliT = cliT;
+
+    const user = await User.findById(ids.cliUser);
+    user.resetToken = crypto.createHash("sha256").update(raw).digest("hex");
+    user.resetTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    const reset = await api("POST", "/auth/reset-password", {
+      body: { resetToken: raw, newPassword: "Fresh!Pass456" },
+    });
+    assert.equal(reset.status, 200);
+
+    // The link is single-use.
+    const reused = await api("POST", "/auth/reset-password", {
+      body: { resetToken: raw, newPassword: "Another!Pass789" },
+    });
+    assert.equal(reused.status, 400);
+
+    // Every JWT issued before the reset is now invalid.
+    assert.equal((await api("GET", "/client", { token: oldCliT })).status, 401);
+
+    cliT = await loginAs("cli@test.local", "Fresh!Pass456");
+    assert.ok(cliT);
+  });
+
+  it("rejects an expired reset token", async () => {
+    const crypto = (await import("crypto")).default;
+    const raw = crypto.randomBytes(32).toString("hex");
+    const user = await User.findById(ids.cliUser);
+    user.resetToken = crypto.createHash("sha256").update(raw).digest("hex");
+    user.resetTokenExpiry = new Date(Date.now() - 1000);
+    await user.save();
+
+    const r = await api("POST", "/auth/reset-password", {
+      body: { resetToken: raw, newPassword: "Expired!Pass789" },
+    });
+    assert.equal(r.status, 400);
+    assert.equal(r.body.code, "INVALID_RESET_TOKEN");
   });
 });
 
@@ -448,6 +516,25 @@ describe("salary privacy", () => {
     const r = await api("GET", `/salary/${ids.cliUser}/client`, { token: cliT });
     assert.equal(r.status, 403);
   });
+
+  it("rejects negative and non-numeric payroll values", async () => {
+    const baseBody = {
+      employeeId: String(ids.empRec),
+      payDate: "2026-01-31",
+    };
+
+    for (const body of [
+      { ...baseBody, basicSalary: -1 },
+      { ...baseBody, basicSalary: "not-a-number" },
+      { ...baseBody, basicSalary: 50000, allowances: -1 },
+      { ...baseBody, basicSalary: 50000, deductions: -1 },
+      { ...baseBody, basicSalary: 1000, deductions: 2000 },
+    ]) {
+      const response = await api("POST", "/salary/add", { token: adminT, body });
+      assert.equal(response.status, 400, JSON.stringify(response.body));
+      assert.equal(response.body.code, "INVALID_AMOUNT");
+    }
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -549,8 +636,10 @@ describe("client onboarding", () => {
     const blocked = await api("POST", "/auth/login", {
       body: { email, password: "anything123" },
     });
-    assert.equal(blocked.status, 403);
-    assert.equal(blocked.body.code, "ACCOUNT_NOT_ACTIVATED");
+    // A generic credential failure: status responses must not reveal that an
+    // account exists and is awaiting activation.
+    assert.equal(blocked.status, 401);
+    assert.equal(blocked.body.code, undefined);
   });
 
   it("rejects an invalid or expired activation token", async () => {
@@ -909,6 +998,14 @@ it("does not return the admin's own or other employees' leave to an employee", a
 });
 
 describe("forged work-request role", () => {
+  it("accepts the signed-in client's own user id as the scope", async () => {
+    // The client portal links to /client-dashboard/work/<user id>; the server
+    // must accept that identifier without widening access to another client.
+    const own = await api("GET", `/work-request/${ids.cliUser}/client`, { token: cliT });
+    assert.equal(own.status, 200, `expected 200, got ${own.status}: ${JSON.stringify(own.body)}`);
+    assert.ok(Array.isArray(own.body.requests));
+  });
+
   it("does not let a client widen the scope with role=admin in the URL", async () => {
     // A second client, so cross-client leakage is actually observable.
     const bcrypt = (await import("bcrypt")).default;

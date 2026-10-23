@@ -1,5 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const API_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 /**
  * Email providers.
@@ -178,7 +181,7 @@ const smtpProvider = async (message, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) =>
  */
 const captureProvider = async (message) => {
   try {
-    const dir = path.resolve(process.cwd(), ".email-outbox");
+    const dir = path.join(API_ROOT, ".email-outbox");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");

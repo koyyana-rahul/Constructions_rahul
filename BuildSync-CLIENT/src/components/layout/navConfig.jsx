@@ -5,16 +5,24 @@ import {
   LuBuilding2,
   LuCalendarDays,
   LuClipboardList,
+  LuClipboardCheck,
   LuWallet,
   LuCalendarCheck,
   LuFileBarChart,
   LuSettings,
+  LuFolderKanban,
+  LuPackage,
+  LuTruck,
+  LuReceipt,
+  LuWrench,
+  LuShieldAlert,
+  LuFileText,
+  LuHistory,
 } from "react-icons/lu";
 
 /**
  * Single declarative source for role navigation.
- * Replaces three near-identical hardcoded sidebar components.
- * Paths match the existing routes exactly - nothing is renamed.
+ * Paths must match the routes in `App.jsx` exactly - nothing is renamed.
  */
 const ROLE_NAV = {
   admin: {
@@ -25,16 +33,31 @@ const ROLE_NAV = {
         items: [{ label: "Dashboard", to: "/admin-dashboard", icon: LuLayoutDashboard }],
       },
       {
+        label: "Projects & Field",
+        items: [
+          { label: "Projects", to: "/admin-dashboard/projects", icon: LuFolderKanban },
+          { label: "Task Board", to: "/admin-dashboard/tasks", icon: LuClipboardCheck },
+          { label: "Daily Reports", to: "/admin-dashboard/daily-reports", icon: LuFileBarChart },
+          { label: "Inventory", to: "/admin-dashboard/inventory", icon: LuPackage },
+          { label: "Equipment", to: "/admin-dashboard/equipment", icon: LuWrench },
+          { label: "Safety", to: "/admin-dashboard/safety", icon: LuShieldAlert },
+          { label: "Documents", to: "/admin-dashboard/documents", icon: LuFileText },
+        ],
+      },
+      {
+        label: "Commercial",
+        items: [
+          { label: "Vendors", to: "/admin-dashboard/vendors", icon: LuTruck },
+          { label: "Expenses", to: "/admin-dashboard/expenses", icon: LuReceipt },
+          { label: "Invoices", to: "/admin-dashboard/invoices", icon: LuWallet },
+        ],
+      },
+      {
         label: "Workforce",
         items: [
           { label: "Employees", to: "/admin-dashboard/employees", icon: LuHardHat },
           { label: "Clients", to: "/admin-dashboard/clients", icon: LuUser },
           { label: "Construction Sites", to: "/admin-dashboard/departments", icon: LuBuilding2 },
-        ],
-      },
-      {
-        label: "Operations",
-        items: [
           { label: "Leave Requests", to: "/admin-dashboard/leaves", icon: LuCalendarDays },
           { label: "Work Requests", to: "/admin-dashboard/work", icon: LuClipboardList },
           { label: "Salary", to: "/admin-dashboard/salary/add", icon: LuWallet },
@@ -44,6 +67,14 @@ const ROLE_NAV = {
             to: "/admin-dashboard/attendance-report",
             icon: LuFileBarChart,
           },
+        ],
+      },
+      {
+        label: "Insights",
+        items: [
+          { label: "Reports", to: "/admin-dashboard/reports", icon: LuFileBarChart },
+          { label: "Audit Trail", to: "/admin-dashboard/audit", icon: LuHistory },
+          { label: "Organization", to: "/admin-dashboard/organization", icon: LuBuilding2 },
         ],
       },
       {
@@ -59,6 +90,18 @@ const ROLE_NAV = {
       {
         label: "Overview",
         items: [{ label: "Dashboard", to: "/employee-dashboard", icon: LuLayoutDashboard }],
+      },
+      {
+        label: "Site Operations",
+        items: [
+          { label: "Projects", to: "/employee-dashboard/projects", icon: LuFolderKanban },
+          { label: "My Tasks", to: "/employee-dashboard/tasks", icon: LuClipboardCheck },
+          { label: "Daily Reports", to: "/employee-dashboard/daily-reports", icon: LuFileBarChart },
+          { label: "Inventory", to: "/employee-dashboard/inventory", icon: LuPackage },
+          { label: "Equipment", to: "/employee-dashboard/equipment", icon: LuWrench },
+          { label: "Safety", to: "/employee-dashboard/safety", icon: LuShieldAlert },
+          { label: "Documents", to: "/employee-dashboard/documents", icon: LuFileText },
+        ],
       },
       {
         label: "My Work",
@@ -78,6 +121,7 @@ const ROLE_NAV = {
             to: `/employee-dashboard/salary/${userId}`,
             icon: LuWallet,
           },
+          { label: "My Reports", to: "/employee-dashboard/reports", icon: LuFileBarChart },
         ],
       },
       {
@@ -93,6 +137,16 @@ const ROLE_NAV = {
       {
         label: "Overview",
         items: [{ label: "Dashboard", to: "/client-dashboard", icon: LuLayoutDashboard }],
+      },
+      {
+        label: "My Project",
+        items: [
+          { label: "Projects", to: "/client-dashboard/projects", icon: LuFolderKanban },
+          { label: "Daily Reports", to: "/client-dashboard/daily-reports", icon: LuFileBarChart },
+          { label: "Invoices", to: "/client-dashboard/invoices", icon: LuReceipt },
+          { label: "Documents", to: "/client-dashboard/documents", icon: LuFileText },
+          { label: "Reports", to: "/client-dashboard/reports", icon: LuFileBarChart },
+        ],
       },
       {
         label: "My Account",

@@ -10,13 +10,23 @@ import {
   LuBriefcase,
   LuBuilding2,
   LuBanknote,
-  LuLock,
   LuShieldCheck,
   LuImage,
+  LuLink,
+  LuCopy,
+  LuCheck,
+  LuClock,
+  LuSend,
+  LuArrowLeft,
+  LuUserPlus,
 } from "react-icons/lu";
 import FormPage from "../ui/FormPage";
 import { Input, Select } from "../ui/Form";
 import Avatar from "../ui/Avatar";
+import Button from "../ui/Button";
+import { Alert } from "../ui/Feedback";
+import { Card, CardBody } from "../ui/Card";
+import PageHeader from "../ui/PageHeader";
 import { useGetDepartmentsQuery } from "../../services/api/endpoints/departmentsApi";
 import { useAddEmployeeMutation } from "../../services/api/endpoints/employeesApi";
 import { getErrorMessage } from "../../lib/api";
@@ -31,7 +41,6 @@ const INITIAL = {
   designation: "",
   department: "",
   salary: "",
-  password: "",
   role: "employee",
   image: null,
 };
@@ -41,6 +50,8 @@ const AddEmployee = () => {
   const [formData, setFormData] = useState(INITIAL);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
+  const [invitation, setInvitation] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   // The site list comes from the server, which already excludes archived
   // sites - so a new hire can never be assigned to a closed site.
@@ -76,10 +87,6 @@ const AddEmployee = () => {
     if (!formData.salary || Number(formData.salary) <= 0)
       next.salary = "Enter a salary greater than 0";
 
-    if (!formData.password) next.password = "Password is required";
-    else if (formData.password.length < 6)
-      next.password = "Password must be at least 6 characters";
-
     if (formData.image && formData.image.size > 2 * 1024 * 1024)
       next.image = "Profile photo must be 2 MB or smaller";
 
@@ -102,8 +109,9 @@ const AddEmployee = () => {
       });
       if (formData.image) payload.append("image", formData.image);
 
-      await createEmployee(payload).unwrap();
-      navigate("/admin-dashboard/employees");
+      const result = await createEmployee(payload).unwrap();
+      // Show the one-time activation link instead of navigating away.
+      setInvitation(result);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to add the employee."));
     }
@@ -126,16 +134,131 @@ const AddEmployee = () => {
     };
   }, [preview]);
 
+  const activationUrl = invitation
+    ? `${window.location.origin}${invitation.activation.url}`
+    : "";
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(activationUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  /* ---------------- Success: invitation issued ---------------- */
+  if (invitation) {
+    return (
+      <>
+        <PageHeader
+          title="Invitation created"
+          description={`${invitation.employee.email} can now set their own password.`}
+          breadcrumbs={[
+            { label: "Admin", to: "/admin-dashboard" },
+            { label: "Employees", to: "/admin-dashboard/employees" },
+            { label: "Invite" },
+          ]}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/admin-dashboard/employees")}
+            >
+              <LuArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to employees
+            </Button>
+          }
+        />
+
+        <div className="max-w-3xl space-y-5">
+          <Alert
+            variant={invitation.emailDelivery?.delivered ? "success" : "warning"}
+          >
+            {invitation.message}
+          </Alert>
+
+          <Card>
+            <CardBody className="space-y-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-navy-900 text-white">
+                  <LuLink className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-navy-900">
+                    Activation link — shown once
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed text-navy-700">
+                    Send this link to {invitation.employee.email}. It lets them
+                    choose their own password and can only be used once.
+                  </p>
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <code className="min-w-0 flex-1 truncate rounded-md border border-navy-200 bg-navy-50 px-3 py-2 font-mono text-xs text-navy-800">
+                      {activationUrl}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={copyLink}
+                      className="shrink-0"
+                    >
+                      {copied ? (
+                        <LuCheck className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <LuCopy className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {copied ? "Copied" : "Copy link"}
+                    </Button>
+                  </div>
+
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-navy-600">
+                    <LuClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    Expires{" "}
+                    {new Date(invitation.activation.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Alert variant={invitation.emailDelivery?.delivered ? "info" : "warning"}>
+            {invitation.emailDelivery?.delivered
+              ? "The email was accepted by the mail provider. Keep this one-time link as a backup - if it is lost, use the resend action on the employees list."
+              : "The email was not delivered. Share this one-time link manually. If it is lost, use the resend action on the employees list."}
+          </Alert>
+
+          <div className="flex flex-wrap gap-3">
+            <Button variant="accent" onClick={() => navigate("/admin-dashboard/employees")}>
+              <LuSend className="h-4 w-4" aria-hidden="true" />
+              Done
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setInvitation(null);
+                setFormData(INITIAL);
+              }}
+            >
+              Invite another employee
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <FormPage
-      title="Add Employee"
-      description="Register a new team member and assign them to a construction site."
+      title="Invite Employee"
+      description="Add a team member and send them a one-time link to choose their own password."
       breadcrumbs={[
         { label: "Admin", to: "/admin-dashboard" },
         { label: "Employees", to: "/admin-dashboard/employees" },
       ]}
       backTo="/admin-dashboard/employees"
-      submitLabel="Add employee"
+      submitLabel="Send invitation"
       submitting={submitting}
       error={error}
       onSubmit={handleSubmit}
@@ -302,20 +425,16 @@ const AddEmployee = () => {
         <option value="employee">Employee</option>
         <option value="admin">Administrator</option>
       </Select>
-      <div className="sm:col-span-2">
-        <Input
-          label="Temporary password"
-          name="password"
-          type="password"
-          placeholder="Minimum 6 characters"
-          value={formData.password}
-          onChange={handleChange}
-          error={errors.password}
-          required
-          hint="The employee can change this from Settings after signing in."
-          icon={<LuLock className="h-4 w-4" />}
-        />
-      </div>
+      <Alert variant="info" className="sm:col-span-2">
+        <span className="flex items-start gap-2">
+          <LuUserPlus className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            The account is created without a password. The employee receives a
+            one-time invitation link and chooses their own password - you never
+            see or store it.
+          </span>
+        </span>
+      </Alert>
     </FormPage>
   );
 };

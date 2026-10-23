@@ -1,10 +1,28 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 
-/** Business date in `YYYY-MM-DD`, computed in the server's local timezone. */
+/**
+ * Business date in `YYYY-MM-DD`.
+ *
+ * Dates that users type into forms are calendar dates in the company's
+ * timezone, not UTC instants. Computing them from the server's OS timezone
+ * breaks in two common cases: a UTC server rejects an Indian user's "today"
+ * as tomorrow, and an ISR runtime can report a different month than users see.
+ * The company timezone is configurable and defaults to India (INR/GST product).
+ */
+export const BUSINESS_TIMEZONE = process.env.BUSINESS_TIMEZONE || "Asia/Kolkata";
+
+const formatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 export const businessDate = (d = new Date()) => {
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
+  const parts = formatter.formatToParts(d);
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 };
 
 /**
@@ -19,7 +37,7 @@ const defaultAttendance = async (req, res, next) => {
   const date = businessDate();
 
   try {
-    const employees = await Employee.find({}, "_id");
+    const employees = await Employee.find({ isActive: { $ne: false } }, "_id").lean();
 
     if (employees.length) {
       const ops = employees.map((employee) => ({

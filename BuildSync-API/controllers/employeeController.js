@@ -1,20 +1,32 @@
-import multer from "multer";
 import Employee from "../models/Employee.js";
 import User from "../models/User.js";
 import Department from "../models/Department.js";
 import bcrypt from "bcrypt";
-import path from "path";
 import ApiError from "../utils/ApiError.js";
 import { recordAudit } from "../services/auditService.js";
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "public/uploads"),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
-});
-
-const upload = multer({ storage });
+import {
+  createActivationToken,
+  unactivatedPasswordHash,
+} from "../services/activationService.js";
+import {
+  describeResult,
+  sendEmployeeInvitation,
+} from "../services/email/emailService.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Salary is commercial data, so reject negative/nonsense values rather than
+ * silently treating them as zero. */
+const parseSalary = (value) => {
+  if (value === undefined || value === null || value === "") return 0;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw ApiError.badRequest("Salary must be zero or a positive number", {
+      code: "INVALID_AMOUNT",
+    });
+  }
+  return amount;
+};
 
 const addEmployee = async (req, res) => {
   const {
@@ -27,7 +39,6 @@ const addEmployee = async (req, res) => {
     designation,
     department,
     salary,
-    password,
   } = req.body;
 
   if (!name?.trim() || !email?.trim() || !employeeId?.trim()) {
@@ -37,11 +48,6 @@ const addEmployee = async (req, res) => {
   }
   if (!EMAIL_RE.test(email.trim())) {
     throw ApiError.badRequest("Enter a valid email address", { code: "INVALID_EMAIL" });
-  }
-  if (!password || password.length < 6) {
-    throw ApiError.badRequest("Password must be at least 6 characters", {
-      code: "WEAK_PASSWORD",
-    });
   }
   if (!department) {
     throw ApiError.badRequest("A construction site is required", { code: "MISSING_FIELD" });
@@ -83,36 +89,86 @@ const addEmployee = async (req, res) => {
   const requestedRole = req.body.role;
   const role = requestedRole === "admin" ? "admin" : "employee";
 
-  const savedUser = await User.create({
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    password: await bcrypt.hash(password, 10),
-    role,
-    phone: req.body.phone,
-    profileImage: req.file ? req.file.filename : "",
-  });
+  const activation = createActivationToken();
+  let savedUser = null;
+  let newEmployee = null;
 
-  const newEmployee = await Employee.create({
-    userId: savedUser._id,
-    employeeId: employeeId.trim(),
-    dob: dob || undefined,
-    gender,
-    maritalStatus,
-    designation,
-    department,
-    salary: Number(salary) || 0,
-    isActive: true,
-  });
+  try {
+    savedUser = await User.create({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      // The employee sets their own password through the invitation link.
+      // Until then this is an unguessable placeholder, not a usable password.
+      password: await unactivatedPasswordHash(bcrypt),
+      role,
+      phone: req.body.phone,
+      profileImage: req.file ? req.file.filename : "",
+      isActivated: false,
+      activationTokenHash: activation.hash,
+      activationTokenExpiry: activation.expiresAt,
+      invitedBy: req.user._id,
+    });
+
+    newEmployee = await Employee.create({
+      userId: savedUser._id,
+      employeeId: employeeId.trim(),
+      dob: dob || undefined,
+      gender,
+      maritalStatus,
+      designation,
+      department,
+      salary: parseSalary(salary),
+      isActive: true,
+    });
+  } catch (error) {
+    // Employee and User must exist together. Without a transaction (for
+    // example on a standalone MongoDB) compensate by removing the half-made
+    // account rather than leaving a login that has no employee record.
+    if (savedUser && !newEmployee) {
+      await User.deleteOne({ _id: savedUser._id }).catch(() => {});
+    }
+    throw error;
+  }
 
   await recordAudit({
     actor: req.user,
     entityType: "Employee",
     entityId: newEmployee._id,
-    action: "employee.created",
-    toState: "active",
+    action: "employee.invited",
+    toState: "invited",
   });
 
-  return res.status(201).json({ success: true, message: "Employee created" });
+  const delivery = await sendEmployeeInvitation({
+    to: savedUser.email,
+    name: savedUser.name,
+    token: activation.raw,
+  });
+
+  return res.status(201).json({
+    success: true,
+    message: delivery.delivered
+      ? `Invitation emailed to ${savedUser.email}.`
+      : `Employee added, but the invitation email was not delivered. Share the setup link manually.`,
+    employee: {
+      _id: newEmployee._id,
+      employeeId: newEmployee.employeeId,
+      name: savedUser.name,
+      email: savedUser.email,
+      role: savedUser.role,
+    },
+    activation: {
+      // Returned once. Only a SHA-256 digest is stored.
+      token: activation.raw,
+      expiresAt: activation.expiresAt,
+      url: `/activate?token=${activation.raw}`,
+    },
+    emailDelivery: {
+      delivered: Boolean(delivery.delivered),
+      status: delivery.status,
+      error: delivery.error,
+      message: describeResult(delivery),
+    },
+  });
 };
 
 const getEmployees = async (req, res) => {
@@ -194,7 +250,7 @@ const updateEmployee = async (req, res) => {
   const changes = {};
   if (maritalStatus !== undefined) { employee.maritalStatus = maritalStatus; changes.maritalStatus = maritalStatus; }
   if (designation !== undefined) { employee.designation = designation; changes.designation = designation; }
-  if (salary !== undefined) { employee.salary = Number(salary) || 0; changes.salary = employee.salary; }
+  if (salary !== undefined) { employee.salary = parseSalary(salary); changes.salary = employee.salary; }
   if (department !== undefined) { employee.department = department; changes.department = department; }
 
   await employee.save();
@@ -219,7 +275,6 @@ const fetchEmployeesByDepId = async (req, res) => {
 
 export {
   addEmployee,
-  upload,
   getEmployees,
   getEmployee,
   updateEmployee,

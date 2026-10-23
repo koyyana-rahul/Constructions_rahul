@@ -7,6 +7,8 @@ import {
   LuPlus,
   LuArrowRight,
   LuUser,
+  LuClipboardCheck,
+  LuHardHat,
 } from "react-icons/lu";
 import PageHeader from "../ui/PageHeader";
 import StatCard from "../ui/StatCard";
@@ -17,6 +19,7 @@ import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
 import { useCurrentUser } from "../../features/auth/useSession";
 import { useGetEmployeeLeavesQuery } from "../../services/api/endpoints/leavesApi";
 import { useGetSalaryQuery } from "../../services/api/endpoints/salaryApi";
+import { useGetReportOverviewQuery } from "../../services/api/endpoints/platformApi";
 import { getErrorMessage } from "../../lib/api";
 import { formatINR } from "../../utils/format";
 
@@ -46,6 +49,9 @@ const EmployeeSummary = () => {
     isFetching: salaryFetching,
     refetch: refetchSalary,
   } = useGetSalaryQuery({ id: userId, role: "employee" }, { skip: !userId });
+
+  const { data: operationsData } = useGetReportOverviewQuery();
+  const operations = operationsData?.overview;
 
   const error = leaveError ?? salaryError;
   const isLoading = leavesLoading || salaryLoading;
@@ -104,6 +110,52 @@ const EmployeeSummary = () => {
               tone="accent"
             />
           </div>
+
+          {operations && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-navy-800">
+                  My site snapshot
+                </h2>
+                <Link
+                  to="/employee-dashboard/tasks"
+                  className="inline-flex items-center gap-1 font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700"
+                >
+                  Task board <LuArrowRight className="h-3 w-3" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <StatCard
+                  icon={LuClipboardCheck}
+                  label="Open tasks"
+                  value={operations.tasks?.open ?? 0}
+                  hint={`${operations.tasks?.dueThisWeek ?? 0} due this week`}
+                  tone="navy"
+                />
+                <StatCard
+                  icon={LuClock}
+                  label="Overdue"
+                  value={operations.tasks?.overdue ?? 0}
+                  hint="Past the due date"
+                  tone={operations.tasks?.overdue ? "warning" : "success"}
+                />
+                <StatCard
+                  icon={LuHardHat}
+                  label="My projects"
+                  value={operations.projects?.total ?? 0}
+                  hint={`${operations.projects?.active ?? 0} active`}
+                  tone="accent"
+                />
+                <StatCard
+                  icon={LuCalendarDays}
+                  label="Attendance today"
+                  value={operations.attendance || "Not marked"}
+                  hint="Reported on your dashboard"
+                  tone={operations.attendance === "Present" ? "success" : "neutral"}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card>

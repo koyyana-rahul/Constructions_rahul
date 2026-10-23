@@ -113,7 +113,11 @@ const View = () => {
             </h2>
             <p className="mt-0.5 font-mono text-xs text-concrete-500">{employee.employeeId}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <StatusBadge status="active" />
+              {userId.isActivated === false ? (
+                <StatusBadge status="pending">Awaiting setup</StatusBadge>
+              ) : (
+                <StatusBadge status="active" />
+              )}
               <StatusBadge status={employee.maritalStatus || "active"} />
             </div>
 

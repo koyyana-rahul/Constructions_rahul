@@ -8,12 +8,17 @@ import Toolbar, { FilterChips } from "../ui/Toolbar";
 import ResponsiveList, { MobileCard } from "../ui/ResponsiveList";
 import { StatusBadge } from "../ui/Badge";
 import { Alert } from "../ui/Feedback";
-import { useGetEmployeeLeavesQuery } from "../../services/api/endpoints/leavesApi";
+import ConfirmDialog, { useConfirm } from "../ui/ConfirmDialog";
+import {
+  useCancelLeaveMutation,
+  useGetEmployeeLeavesQuery,
+} from "../../services/api/endpoints/leavesApi";
 import { getErrorMessage } from "../../lib/api";
 import { useCurrentUser } from "../../features/auth/useSession";
 import EmployeeContextHeader, {
   EmployeeCrumb,
 } from "../employee/EmployeeContextHeader";
+import { inclusiveDays } from "../../utils/dates";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "" },
@@ -87,9 +92,12 @@ const LeaveList = () => {
   const user = useCurrentUser();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const confirm = useConfirm();
 
   const isEmployeeSelf = user?.role === "employee";
   const role = user?.role ?? "employee";
+  const [cancelLeave, cancelState] = useCancelLeaveMutation();
 
   /**
    * `id` and `role` are part of the RTK Query cache key, so Employee A's
@@ -111,11 +119,45 @@ const LeaveList = () => {
       (data ?? []).map((leave, index) => ({
         ...leave,
         sno: index + 1,
-        days:
-          Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) || 0,
+        days: inclusiveDays(leave.startDate, leave.endDate),
       })),
     [data]
   );
+
+  const onCancelLeave = async () => {
+    setCancelError("");
+    confirm.setLoading(true);
+    try {
+      await cancelLeave(confirm.target).unwrap();
+      confirm.close();
+    } catch (cancelFailure) {
+      setCancelError(getErrorMessage(cancelFailure, "The leave request could not be cancelled."));
+      confirm.close();
+    }
+  };
+
+  const visibleColumns = isEmployeeSelf
+    ? [
+        ...columns,
+        {
+          name: "",
+          width: "110px",
+          cell: (row) =>
+            row.status === "Pending" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCancelError("");
+                  confirm.open(row._id);
+                }}
+              >
+                Cancel
+              </Button>
+            ) : null,
+        },
+      ]
+    : columns;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -174,6 +216,12 @@ const LeaveList = () => {
         </Alert>
       )}
 
+      {cancelError && (
+        <Alert variant="error" className="mb-4 sm:mb-5">
+          {cancelError}
+        </Alert>
+      )}
+
       <Card className="overflow-hidden">
         <Toolbar
           searchValue={search}
@@ -192,7 +240,7 @@ const LeaveList = () => {
         </Toolbar>
 
         <ResponsiveList
-          columns={columns}
+          columns={visibleColumns}
           data={filtered}
           loading={isLoading}
           error={error && filtered.length === 0 ? getErrorMessage(error, null) : null}
@@ -238,10 +286,35 @@ const LeaveList = () => {
                   <span>{leave.days} day(s)</span>
                 </>
               }
+              actions={
+                isEmployeeSelf && leave.status === "Pending" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCancelError("");
+                      confirm.open(leave._id);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null
+              }
             />
           )}
         />
       </Card>
+
+      <ConfirmDialog
+        open={confirm.confirmOpen}
+        loading={confirm.loading || cancelState.isLoading}
+        title="Cancel this leave request?"
+        description="The request will be withdrawn. Approved leave cannot be cancelled."
+        confirmLabel="Cancel request"
+        variant="danger"
+        onCancel={confirm.close}
+        onConfirm={onCancelLeave}
+      />
     </>
   );
 };

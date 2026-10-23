@@ -5,6 +5,13 @@ import Leave from "../models/Leave.js";
 import Salary from "../models/Salary.js";
 import Attendance from "../models/Attendance.js";
 import User from "../models/User.js";
+import Project from "../models/Project.js";
+import DailyReport from "../models/DailyReport.js";
+import Equipment from "../models/Equipment.js";
+import DocumentFile from "../models/DocumentFile.js";
+import StockMovement from "../models/StockMovement.js";
+import SafetyIncident from "../models/SafetyIncident.js";
+import Expense from "../models/Expense.js";
 import ApiError from "../utils/ApiError.js";
 import { recordAudit } from "../services/auditService.js";
 
@@ -114,26 +121,34 @@ const archiveDepartment = async (req, res) => {
     department.archivedBy = req.user._id;
     await department.save({ session });
 
-    const employees = await Employee.find({ department: id }, "_id userId").session(session);
-    const employeeIds = employees.map((e) => e._id);
-    const userIds = employees.map((e) => e.userId).filter(Boolean);
+    const employees = await Employee.find({ department: id }, "_id userId isActive").session(session);
+    // Only accounts that are still enabled and belong to the employee role.
+    // An administrator who also has an employee record must never be locked
+    // out of the platform by closing a site.
+    const activeEmployees = employees.filter((employee) => employee.isActive !== false);
+    const activeEmployeeIds = activeEmployees.map((employee) => employee._id);
+    const userIds = activeEmployees.map((employee) => employee.userId).filter(Boolean);
 
-    if (employeeIds.length) {
+    if (activeEmployeeIds.length) {
       await Employee.updateMany(
-        { _id: { $in: employeeIds } },
-        { $set: { isActive: false } },
+        { _id: { $in: activeEmployeeIds } },
+        { $set: { isActive: false, deactivatedBySite: id } },
         { session }
       );
     }
     if (userIds.length) {
       await User.updateMany(
-        { _id: { $in: userIds } },
-        { $set: { isDisabled: true } },
+        {
+          _id: { $in: userIds },
+          role: "employee",
+          isDisabled: { $ne: true },
+        },
+        { $set: { isDisabled: true, disabledBySite: id } },
         { session }
       );
     }
 
-    return { employeesDeactivated: employeeIds.length };
+    return { employeesDeactivated: activeEmployeeIds.length };
   });
 
   await recordAudit({
@@ -172,12 +187,22 @@ const restoreDepartment = async (req, res) => {
       session
     );
     const employeeIds = employees.map((e) => e._id);
-    const userIds = employees.map((e) => e.userId).filter(Boolean);
 
-    if (employeeIds.length)
-      await Employee.updateMany({ _id: { $in: employeeIds } }, { $set: { isActive: true } }, { session });
-    if (userIds.length)
-      await User.updateMany({ _id: { $in: userIds } }, { $set: { isDisabled: false } }, { session });
+    // Restore ONLY what this archive changed. An employee who was already
+    // inactive (for example, left the company) stays inactive, and an account
+    // disabled for another reason stays disabled.
+    if (employeeIds.length) {
+      await Employee.updateMany(
+        { department: department._id, deactivatedBySite: department._id },
+        { $set: { isActive: true }, $unset: { deactivatedBySite: 1 } },
+        { session }
+      );
+    }
+    await User.updateMany(
+      { disabledBySite: department._id },
+      { $set: { isDisabled: false }, $unset: { disabledBySite: 1 } },
+      { session }
+    );
   });
 
   await recordAudit({
@@ -208,20 +233,55 @@ const deleteDepartment = async (req, res) => {
   const employees = await Employee.find({ department: id }, "_id");
   const employeeIds = employees.map((e) => e._id);
 
-  const [attendanceCount, leaveCount, salaryCount] = await Promise.all([
+  const [
+    attendanceCount,
+    leaveCount,
+    salaryCount,
+    projectCount,
+    reportCount,
+    equipmentCount,
+    documentCount,
+    stockMovementCount,
+    safetyCount,
+    expenseCount,
+  ] = await Promise.all([
     Attendance.countDocuments({ employeeId: { $in: employeeIds } }),
     Leave.countDocuments({ employeeId: { $in: employeeIds } }),
     Salary.countDocuments({ employeeId: { $in: employeeIds } }),
+    Project.countDocuments({ site: id }),
+    DailyReport.countDocuments({ site: id }),
+    Equipment.countDocuments({ site: id }),
+    DocumentFile.countDocuments({ site: id }),
+    StockMovement.countDocuments({ site: id }),
+    SafetyIncident.countDocuments({ site: id }),
+    Expense.countDocuments({ site: id }),
   ]);
 
-  const historical = attendanceCount + leaveCount + salaryCount;
+  const dependencies = {
+    employees: employees.length,
+    attendance: attendanceCount,
+    leave: leaveCount,
+    payroll: salaryCount,
+    projects: projectCount,
+    dailyReports: reportCount,
+    equipment: equipmentCount,
+    documents: documentCount,
+    stockMovements: stockMovementCount,
+    safetyIncidents: safetyCount,
+    expenses: expenseCount,
+  };
+  const historical = Object.values(dependencies).reduce((sum, count) => sum + count, 0);
 
   if (historical > 0) {
+    const summary = Object.entries(dependencies)
+      .filter(([, count]) => count > 0)
+      .map(([label, count]) => `${count} ${label}`)
+      .join(", ");
     throw ApiError.conflict(
-      `Cannot permanently delete this site: ${attendanceCount} attendance, ${leaveCount} leave and ${salaryCount} payroll records depend on it. Archive the site instead to preserve history.`,
+      `Cannot permanently delete this site: ${summary} depend on it. Archive the site instead to preserve history.`,
       {
         code: "HISTORICAL_DEPENDENCIES",
-        details: { attendanceCount, leaveCount, salaryCount },
+        details: dependencies,
       }
     );
   }

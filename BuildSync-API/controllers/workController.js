@@ -4,6 +4,7 @@ import { body, validationResult } from "express-validator";
 import path from "path";
 import ApiError from "../utils/ApiError.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRoles, notifyUser } from "../services/notificationService.js";
 
 /**
  * Work-request lifecycle.
@@ -109,6 +110,14 @@ async function addWorkRequest(req, res) {
     toState: "Pending",
   });
 
+  await notifyRoles(["admin"], {
+    type: "Approval",
+    title: "New work request received",
+    message: `${req.user.name || "A client"} submitted "${workRequest.name}".`,
+    link: `/admin-dashboard/work/${workRequest._id}`,
+    excludeUserId: req.user._id,
+  });
+
   return res.status(201).json({ success: true, request: workRequest });
 }
 
@@ -124,9 +133,13 @@ async function getWorkRequest(req, res) {
     workRequests = await WorkRequest.find({ clientId: id });
   } else {
     // Ownership is resolved from the token, then confirmed against the id.
+    // The portal links here with the signed-in *user* id while older links and
+    // the admin view use the client record id, so accept either identifier for
+    // the caller. The query below is still scoped to the token-owned client.
     const client = await Client.findOne({ userId: req.user._id });
     if (!client) return res.status(200).json({ success: true, requests: [] });
-    if (String(client._id) !== String(id)) {
+    const requested = String(id);
+    if (String(client._id) !== requested && String(client.userId) !== requested) {
       throw ApiError.forbidden("You can only view your own work requests", {
         code: "FORBIDDEN_OWNERSHIP",
       });
@@ -142,10 +155,13 @@ async function getWorkRequests(req, res) {
   const take = Math.min(parseInt(limit, 10) || 25, 100);
   const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
 
-  const filter =
-    req.user.role === "client"
-      ? { clientId: await clientIdFor(req.user._id) }
-      : {};
+  let filter = {};
+  if (req.user.role === "client") {
+    const ownClientId = await clientIdFor(req.user._id);
+    // A client account without a profile must see an empty list, not records
+    // whose clientId happens to be null/missing.
+    filter = ownClientId ? { clientId: ownClientId } : { _id: null };
+  }
 
   const [requests, total] = await Promise.all([
     WorkRequest.find(filter)
@@ -216,11 +232,16 @@ async function updateWorkRequest(req, res) {
   // in the audit trail (see recordAudit below).
   updateData.rejectionReason = status === "Rejected" ? trimmedReason : null;
 
-  const workRequest = await WorkRequest.findByIdAndUpdate(
-    id,
+  const workRequest = await WorkRequest.findOneAndUpdate(
+    { _id: id, status: existing.status },
     { $set: updateData },
     { new: true, runValidators: true }
   );
+  if (!workRequest) {
+    throw ApiError.conflict("This work request was updated by someone else", {
+      code: "CONCURRENT_UPDATE",
+    });
+  }
 
   await recordAudit({
     actor: req.user,
@@ -230,6 +251,19 @@ async function updateWorkRequest(req, res) {
     fromState: existing.status,
     toState: status,
     reason: trimmedReason || undefined,
+  });
+
+  const client = await Client.findById(workRequest.clientId).select("userId").lean();
+  await notifyUser({
+    userId: client?.userId,
+    type: status === "Rejected" ? "Info" : "Approval",
+    title: `Work request ${status.toLowerCase()}`,
+    message:
+      status === "Rejected"
+        ? `"${workRequest.name}" was rejected: ${trimmedReason}`
+        : `"${workRequest.name}" is now ${status.toLowerCase()}.`,
+    link: `/client-dashboard/work/${workRequest.clientId}`,
+    excludeUserId: req.user._id,
   });
 
   return res.status(200).json({ success: true, request: workRequest });

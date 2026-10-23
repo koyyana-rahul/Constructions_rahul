@@ -45,6 +45,22 @@ const Attendance = lazy(() => import("./components/attendance/Attendance"));
 const AttendanceReport = lazy(() => import("./components/attendance/AttendanceReport"));
 const ChangePassword = lazy(() => import("./components/EmployeeDashboard/Setting"));
 
+const Projects = lazy(() => import("./components/operations/Projects"));
+const ProjectForm = lazy(() => import("./components/operations/ProjectForm"));
+const ProjectDetail = lazy(() => import("./components/operations/ProjectDetail"));
+const Tasks = lazy(() => import("./components/operations/Tasks"));
+const DailyReports = lazy(() => import("./components/operations/DailyReports"));
+const Inventory = lazy(() => import("./components/operations/Inventory"));
+const Vendors = lazy(() => import("./components/operations/Vendors"));
+const Expenses = lazy(() => import("./components/operations/Expenses"));
+const Invoices = lazy(() => import("./components/operations/Invoices"));
+const Equipment = lazy(() => import("./components/operations/Equipment"));
+const Safety = lazy(() => import("./components/operations/Safety"));
+const Documents = lazy(() => import("./components/operations/Documents"));
+const Reports = lazy(() => import("./components/operations/Reports"));
+const Audit = lazy(() => import("./components/operations/Audit"));
+const Organization = lazy(() => import("./components/operations/Organization"));
+
 function App() {
   return (
     <BrowserRouter>
@@ -65,7 +81,10 @@ function App() {
           {/* Public self-registration is removed. Clients are invited by an
               administrator and activate their own account at /activate. */}
           <Route path="/activate" element={<Activate />} />
+          {/* Legacy email links used /setup-password; keep them working. */}
+          <Route path="/setup-password" element={<Activate />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ForgotPassword />} />
 
           {/* Administrator */}
           <Route
@@ -96,6 +115,31 @@ function App() {
               <Route path="setting" element={<ChangePassword />} />
               <Route path="attendance" element={<Attendance />} />
               <Route path="attendance-report" element={<AttendanceReport />} />
+
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/new" element={<ProjectForm />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
+              <Route path="projects/:id/edit" element={<ProjectForm />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="tasks/:id" element={<Tasks />} />
+              <Route path="daily-reports" element={<DailyReports />} />
+              <Route path="daily-reports/:id" element={<DailyReports />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="inventory/:id" element={<Inventory />} />
+              <Route path="vendors" element={<Vendors />} />
+              <Route path="vendors/:id" element={<Vendors />} />
+              <Route path="expenses" element={<Expenses />} />
+              <Route path="invoices" element={<Invoices />} />
+              <Route path="invoices/:id" element={<Invoices />} />
+              <Route path="equipment" element={<Equipment />} />
+              <Route path="equipment/:id" element={<Equipment />} />
+              <Route path="safety" element={<Safety />} />
+              <Route path="safety/:id" element={<Safety />} />
+              <Route path="documents" element={<Documents />} />
+              <Route path="documents/:id" element={<Documents />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="audit" element={<Audit />} />
+              <Route path="organization" element={<Organization />} />
             </Route>
           </Route>
 
@@ -111,6 +155,21 @@ function App() {
               <Route path="add-leave" element={<AddLeave />} />
               <Route path="salary/:id" element={<ViewSalary />} />
               <Route path="setting" element={<ChangePassword />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="tasks/:id" element={<Tasks />} />
+              <Route path="daily-reports" element={<DailyReports />} />
+              <Route path="daily-reports/:id" element={<DailyReports />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="inventory/:id" element={<Inventory />} />
+              <Route path="equipment" element={<Equipment />} />
+              <Route path="equipment/:id" element={<Equipment />} />
+              <Route path="safety" element={<Safety />} />
+              <Route path="safety/:id" element={<Safety />} />
+              <Route path="documents" element={<Documents />} />
+              <Route path="documents/:id" element={<Documents />} />
+              <Route path="reports" element={<Reports />} />
             </Route>
           </Route>
 
@@ -125,6 +184,15 @@ function App() {
               <Route path="setting" element={<ChangePassword />} />
               <Route path="work/:id" element={<WorkList />} />
               <Route path="add-work" element={<AddWork />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
+              <Route path="daily-reports" element={<DailyReports />} />
+              <Route path="daily-reports/:id" element={<DailyReports />} />
+              <Route path="invoices" element={<Invoices />} />
+              <Route path="invoices/:id" element={<Invoices />} />
+              <Route path="documents" element={<Documents />} />
+              <Route path="documents/:id" element={<Documents />} />
+              <Route path="reports" element={<Reports />} />
             </Route>
           </Route>
 

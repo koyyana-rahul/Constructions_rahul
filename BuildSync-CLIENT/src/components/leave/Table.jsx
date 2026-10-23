@@ -10,6 +10,7 @@ import { Alert } from "../ui/Feedback";
 import { useGetLeavesQuery } from "../../services/api/endpoints/leavesApi";
 import { getErrorMessage } from "../../lib/api";
 import { columns, LeaveButtons } from "../../utils/LeaveHelper";
+import { inclusiveDays } from "../../utils/dates";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "" },
@@ -36,8 +37,7 @@ const LeaveTable = () => {
       department: leave.employeeId?.department?.dep_name,
       startDate: leave.startDate,
       endDate: leave.endDate,
-      days:
-        Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) || 0,
+      days: inclusiveDays(leave.startDate, leave.endDate),
       status: leave.status,
     }));
     return list;

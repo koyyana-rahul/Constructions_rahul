@@ -35,6 +35,7 @@ const EmployeeList = () => {
       designation: emp.designation,
       dob: emp.dob,
       isActive: emp.isActive !== false,
+      isActivated: emp.userId?.isActivated !== false,
       profileImage: assetUrl(emp.userId?.profileImage),
       userIdRef: emp.userId?._id,
     }));
@@ -134,7 +135,9 @@ const EmployeeList = () => {
                 </>
               }
               status={
-                emp.isActive ? (
+                !emp.isActivated ? (
+                  <StatusBadge status="pending">Awaiting setup</StatusBadge>
+                ) : emp.isActive ? (
                   <StatusBadge status="active" />
                 ) : (
                   <StatusBadge status="inactive" />
@@ -146,7 +149,14 @@ const EmployeeList = () => {
                   {emp.dob && <span>DOB {new Date(emp.dob).toLocaleDateString()}</span>}
                 </>
               }
-              actions={<EmployeeButtons Id={emp._id} name={emp.name} />}
+              actions={
+                <EmployeeButtons
+                  Id={emp._id}
+                  name={emp.name}
+                  userIdRef={emp.userIdRef}
+                  isActivated={emp.isActivated}
+                />
+              }
             />
           )}
         />

@@ -3,6 +3,7 @@ import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import ApiError from "../utils/ApiError.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRoles, notifyUser } from "../services/notificationService.js";
 
 /** Leave decisions are a fixed, auditable set. */
 export const LEAVE_STATES = ["Pending", "Approved", "Rejected", "Cancelled"];
@@ -88,6 +89,14 @@ const addLeave = async (req, res) => {
     action: "leave.applied",
     fromState: null,
     toState: "Pending",
+  });
+
+  await notifyRoles(["admin"], {
+    type: "Approval",
+    title: "Leave request awaiting approval",
+    message: `${req.user.name || "An employee"} requested ${leaveType} leave.`,
+    link: `/admin-dashboard/leaves/${newLeave._id}`,
+    excludeUserId: req.user._id,
   });
 
   return res.status(201).json({ success: true, leave: newLeave });
@@ -216,6 +225,16 @@ const updateLeave = async (req, res) => {
     toState: status,
   });
 
+  const employee = await Employee.findById(updated.employeeId).select("userId").lean();
+  await notifyUser({
+    userId: employee?.userId,
+    type: status === "Approved" ? "Approval" : "Info",
+    title: `Leave request ${status.toLowerCase()}`,
+    message: `Your ${updated.leaveType} leave request was ${status.toLowerCase()} by ${req.user.name || "an administrator"}.`,
+    link: `/employee-dashboard/leaves/${employee?.userId}`,
+    excludeUserId: req.user._id,
+  });
+
   return res.status(200).json({ success: true, leave: updated });
 };
 
@@ -237,20 +256,30 @@ const cancelLeave = async (req, res) => {
     });
   }
 
-  leave.status = "Cancelled";
-  leave.updatedAt = new Date();
-  await leave.save();
+  // Conditional update: if an administrator approves the request between the
+  // read above and this write, the cancellation must lose rather than silently
+  // overwriting the approval.
+  const updated = await Leave.findOneAndUpdate(
+    { _id: leave._id, status: "Pending" },
+    { $set: { status: "Cancelled", updatedAt: new Date() } },
+    { new: true }
+  );
+  if (!updated) {
+    throw ApiError.conflict("This leave request was already actioned by an administrator", {
+      code: "CONCURRENT_UPDATE",
+    });
+  }
 
   await recordAudit({
     actor: req.user,
     entityType: "Leave",
-    entityId: leave._id,
+    entityId: updated._id,
     action: "leave.cancelled",
     fromState: "Pending",
     toState: "Cancelled",
   });
 
-  return res.status(200).json({ success: true, leave });
+  return res.status(200).json({ success: true, leave: updated });
 };
 
 export {

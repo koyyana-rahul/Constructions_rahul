@@ -1,6 +1,8 @@
-import multer from "multer";
 import Client from "../models/Client.js";
 import User from "../models/User.js";
+import WorkRequest from "../models/Work.js";
+import Project from "../models/Project.js";
+import Invoice from "../models/Invoice.js";
 import bcrypt from "bcrypt";
 import path from "path";
 import fs from "fs";
@@ -10,18 +12,11 @@ import {
   createActivationToken,
   unactivatedPasswordHash,
 } from "../services/activationService.js";
-
-const uploadDir = "public/uploads";
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
-});
-
-const upload = multer({ storage });
+import {
+  describeResult,
+  sendClientInvitation,
+} from "../services/email/emailService.js";
+import { UPLOAD_DIR } from "../middleware/multerConfig.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -35,15 +30,20 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * administrator to deliver.
  */
 const addClient = async (req, res) => {
-  const { name, email, entityType, phone, companyName } = req.body;
+  const { entityType } = req.body;
+  const nameText = typeof req.body.name === "string" ? req.body.name.trim() : "";
+  const emailText = typeof req.body.email === "string" ? req.body.email.trim() : "";
+  const phoneText = typeof req.body.phone === "string" ? req.body.phone.trim() : "";
+  const companyText =
+    typeof req.body.companyName === "string" ? req.body.companyName.trim() : "";
 
-  if (!name?.trim()) throw ApiError.badRequest("Contact name is required", { code: "MISSING_FIELD" });
-  if (!companyName?.trim())
+  if (!nameText) throw ApiError.badRequest("Contact name is required", { code: "MISSING_FIELD" });
+  if (!companyText)
     throw ApiError.badRequest("Organisation name is required", { code: "MISSING_FIELD" });
-  if (!email?.trim() || !EMAIL_RE.test(email.trim())) {
+  if (!emailText || !EMAIL_RE.test(emailText)) {
     throw ApiError.badRequest("A valid email address is required", { code: "INVALID_EMAIL" });
   }
-  if (!phone?.trim() || !/^\+?[0-9][0-9\s-]{6,19}$/.test(phone.trim())) {
+  if (!phoneText || !/^\+?[0-9][0-9\s-]{6,19}$/.test(phoneText)) {
     throw ApiError.badRequest("A valid phone number is required", { code: "INVALID_PHONE" });
   }
   if (!["natural", "legal"].includes(entityType)) {
@@ -53,7 +53,7 @@ const addClient = async (req, res) => {
   }
 
   const clash = await User.findOne({
-    email: { $regex: `^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+    email: { $regex: `^${emailText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
   });
   if (clash) {
     throw ApiError.conflict(
@@ -66,29 +66,39 @@ const addClient = async (req, res) => {
 
   const activation = createActivationToken();
 
-  const savedUser = await User.create({
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    // Unguessable placeholder: the account cannot authenticate until activated.
-    password: await unactivatedPasswordHash(bcrypt),
-    role: "client",
-    phone: phone.trim(),
-    profileImage: req.file ? req.file.filename : "",
-    isActivated: false,
-    activationTokenHash: activation.hash,
-    activationTokenExpiry: activation.expiresAt,
-    invitedBy: req.user._id,
-  });
+  let savedUser = null;
+  let client = null;
+  try {
+    savedUser = await User.create({
+      name: nameText,
+      email: emailText.toLowerCase(),
+      // Unguessable placeholder: the account cannot authenticate until activated.
+      password: await unactivatedPasswordHash(bcrypt),
+      role: "client",
+      phone: phoneText,
+      profileImage: req.file ? req.file.filename : "",
+      isActivated: false,
+      activationTokenHash: activation.hash,
+      activationTokenExpiry: activation.expiresAt,
+      invitedBy: req.user._id,
+    });
 
-  // The Client profile is created in the same request and permanently linked
-  // to this User, so the client can only ever reach their own data.
-  const client = await Client.create({
-    userId: savedUser._id,
-    entityType,
-    phone: phone.trim(),
-    companyName: companyName.trim(),
-    image: req.file ? req.file.filename : "",
-  });
+    // The Client profile is created in the same request and permanently linked
+    // to this User, so the client can only ever reach their own data.
+    client = await Client.create({
+      userId: savedUser._id,
+      entityType,
+      phone: phoneText,
+      companyName: companyText,
+      image: req.file ? req.file.filename : "",
+    });
+  } catch (error) {
+    // The profile and login must exist together. Compensate rather than
+    // leaving an orphan login (or an uploaded file) when a later write fails.
+    if (savedUser) await User.deleteOne({ _id: savedUser._id }).catch(() => {});
+    if (req.file?.path) await fs.promises.unlink(req.file.path).catch(() => {});
+    throw error;
+  }
 
   await recordAudit({
     actor: req.user,
@@ -98,15 +108,33 @@ const addClient = async (req, res) => {
     toState: "invited",
   });
 
+  // The invitation is complete even if the mail provider is unavailable. The
+  // response reports the real delivery outcome and always includes the
+  // one-time link so an administrator can deliver it manually.
+  const delivery = await sendClientInvitation({
+    to: savedUser.email,
+    name: savedUser.name,
+    companyName: client.companyName,
+    token: activation.raw,
+  });
+
   return res.status(201).json({
     success: true,
-    message: `Invitation created for ${savedUser.email}. Send them the activation link below so they can set their own password.`,
+    message: delivery.delivered
+      ? `Invitation emailed to ${savedUser.email}.`
+      : `Invitation created for ${savedUser.email}, but the email was not delivered. Share the activation link manually.`,
     client: { _id: client._id, name: savedUser.name, email: savedUser.email },
     activation: {
       // Returned once. Only a SHA-256 digest is stored.
       token: activation.raw,
       expiresAt: activation.expiresAt,
       url: `/activate?token=${activation.raw}`,
+    },
+    emailDelivery: {
+      delivered: Boolean(delivery.delivered),
+      status: delivery.status,
+      error: delivery.error,
+      message: describeResult(delivery),
     },
   });
 };
@@ -162,7 +190,31 @@ const getClient = async (req, res) => {
 
 const updateClient = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, entityType } = req.body;
+  const { entityType } = req.body;
+  const nameText =
+    req.body.name !== undefined
+      ? typeof req.body.name === "string"
+        ? req.body.name.trim()
+        : ""
+      : undefined;
+  const emailText =
+    req.body.email !== undefined
+      ? typeof req.body.email === "string"
+        ? req.body.email.trim()
+        : ""
+      : undefined;
+  const phoneText =
+    req.body.phone !== undefined
+      ? typeof req.body.phone === "string"
+        ? req.body.phone.trim()
+        : ""
+      : undefined;
+  const companyText =
+    req.body.companyName !== undefined
+      ? typeof req.body.companyName === "string"
+        ? req.body.companyName.trim()
+        : ""
+      : undefined;
 
   const client = await Client.findById(id);
   if (!client) throw ApiError.notFound("Client not found");
@@ -175,26 +227,38 @@ const updateClient = async (req, res) => {
       code: "INVALID_ENTITY_TYPE",
     });
   }
-  if (email !== undefined && !EMAIL_RE.test(email.trim())) {
+  if (nameText !== undefined && !nameText) {
+    throw ApiError.badRequest("Name cannot be empty", { code: "MISSING_FIELD" });
+  }
+  if (emailText !== undefined && !EMAIL_RE.test(emailText)) {
     throw ApiError.badRequest("A valid email address is required", { code: "INVALID_EMAIL" });
   }
+  if (
+    phoneText !== undefined &&
+    (!phoneText || !/^\+?[0-9][0-9\s-]{6,19}$/.test(phoneText))
+  ) {
+    throw ApiError.badRequest("A valid phone number is required", { code: "INVALID_PHONE" });
+  }
+  if (companyText !== undefined && !companyText) {
+    throw ApiError.badRequest("Organisation name cannot be empty", { code: "MISSING_FIELD" });
+  }
 
-  if (name !== undefined) { if (!name.trim()) throw ApiError.badRequest("Name cannot be empty", { code: "MISSING_FIELD" }); user.name = name.trim(); }
-  if (email !== undefined) {
+  if (nameText !== undefined) user.name = nameText;
+  if (emailText !== undefined) {
     const other = await User.findOne({
-      email: { $regex: `^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+      email: { $regex: `^${emailText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
       _id: { $ne: user._id },
     });
     if (other) throw ApiError.conflict("That email address is already registered", { code: "DUPLICATE_EMAIL" });
-    user.email = email.trim().toLowerCase();
+    user.email = emailText.toLowerCase();
   }
-  if (phone !== undefined) user.phone = phone;
+  if (phoneText !== undefined) user.phone = phoneText;
 
   await user.save();
 
   if (entityType !== undefined) client.entityType = entityType;
-  if (phone !== undefined) client.phone = phone;
-  if (req.body.companyName !== undefined) client.companyName = req.body.companyName;
+  if (phoneText !== undefined) client.phone = phoneText;
+  if (companyText !== undefined) client.companyName = companyText;
   await client.save();
 
   await recordAudit({
@@ -208,8 +272,8 @@ const updateClient = async (req, res) => {
 };
 
 /**
- * Hard delete. Refuses while work requests still reference the client so the
- * client's project history is never silently orphaned.
+ * Hard delete. Refuses while any project, invoice or work request still
+ * references the client, so billing and project history are never orphaned.
  */
 const deleteClient = async (req, res) => {
   const { id } = req.params;
@@ -217,20 +281,26 @@ const deleteClient = async (req, res) => {
   const client = await Client.findById(id);
   if (!client) throw ApiError.notFound("Client not found");
 
-  const { default: WorkRequest } = await import("../models/Work.js");
-  const linked = await WorkRequest.countDocuments({ clientId: id });
-  if (linked > 0) {
+  const [workRequests, projects, invoices] = await Promise.all([
+    WorkRequest.countDocuments({ clientId: id }),
+    Project.countDocuments({ client: id }),
+    Invoice.countDocuments({ client: id }),
+  ]);
+
+  const details = { workRequests, projects, invoices };
+  if (Object.values(details).some((count) => count > 0)) {
     throw ApiError.conflict(
-      `This client has ${linked} work request(s) on record. Those must be retained for project history.`,
-      { code: "HISTORICAL_DEPENDENCIES", details: { workRequests: linked } }
+      "This client has projects, invoices or work requests on record. Those records must be retained for project and billing history, so the client cannot be deleted.",
+      { code: "HISTORICAL_DEPENDENCIES", details }
     );
   }
 
   const user = await User.findById(client.userId);
 
-  if (client.image) {
-    const imagePath = path.join(uploadDir, client.image);
-    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+  const images = new Set([client.image, user?.profileImage].filter(Boolean));
+  for (const image of images) {
+    const imagePath = path.join(UPLOAD_DIR, image);
+    await fs.promises.unlink(imagePath).catch(() => {});
   }
 
   await Client.deleteOne({ _id: id });
@@ -247,4 +317,4 @@ const deleteClient = async (req, res) => {
   return res.status(200).json({ success: true, message: "Client deleted" });
 };
 
-export { addClient, getClients, getClient, updateClient, deleteClient, upload };
+export { addClient, getClients, getClient, updateClient, deleteClient };

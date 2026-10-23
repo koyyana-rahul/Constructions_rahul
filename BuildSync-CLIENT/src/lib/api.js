@@ -8,7 +8,7 @@ import axios from "axios";
  * across 49 call sites.
  */
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5050/api";
 
 /**
  * Origin that serves `/public/uploads` (profile images, work-request

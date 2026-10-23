@@ -150,10 +150,10 @@ describe("invitation emails", () => {
 
     assert.match(
       html,
-      /https:\/\/app\.builtra\.test\/setup-password\?token=raw-token-abc/,
+      /https:\/\/app\.builtra\.test\/activate\?token=raw-token-abc/,
       "the link must use the configured FRONTEND_BASE_URL"
     );
-    assert.match(text, /https:\/\/app\.builtra\.test\/setup-password\?token=raw-token-abc/);
+    assert.match(text, /https:\/\/app\.builtra\.test\/activate\?token=raw-token-abc/);
     assert.match(received[0].body.subject, /Set up your Builtra employee account/);
     assert.match(html, /Rohan Verma/);
   });
@@ -183,7 +183,7 @@ describe("invitation emails", () => {
       token: "a token/with?chars&=+",
     });
 
-    const link = received[0].body.text.match(/https:\/\/app\.builtra\.test\/setup-password\?\S+/)[0];
+    const link = received[0].body.text.match(/https:\/\/app\.builtra\.test\/activate\?\S+/)[0];
     assert.match(link, /token=a%20token%2Fwith%3Fchars%26%3D%2B/);
   });
 });

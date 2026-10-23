@@ -44,4 +44,8 @@ export const frontendBaseUrl = () =>
 
 /** Builds a setup-password link for an invitation token. */
 export const buildSetupLink = (token) =>
-  `${frontendBaseUrl()}/setup-password?token=${encodeURIComponent(token)}`;
+  `${frontendBaseUrl()}/activate?token=${encodeURIComponent(token)}`;
+
+/** Builds a password-reset link for a single-use reset token. */
+export const buildResetLink = (token) =>
+  `${frontendBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;

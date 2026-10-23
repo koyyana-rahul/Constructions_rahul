@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import Chatbot from "../Chatbot/ChatBot";
 import { getNavSections } from "./navConfig";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useCurrentUser } from "../../features/auth/useSession";
@@ -74,6 +75,7 @@ const AppShell = () => {
           </div>
         </main>
       </div>
+      <Chatbot />
     </div>
   );
 };

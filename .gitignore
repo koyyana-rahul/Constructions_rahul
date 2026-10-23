@@ -20,6 +20,10 @@
 # Ignoră conținutul din uploads
 /BuildSync-API/public/uploads/*
 
+# Private uploads (project documents and expense receipts) - runtime data,
+# served only through authenticated download routes.
+/BuildSync-API/private/
+
 # === COMUNE ===
 .DS_Store
 Thumbs.db

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuUser,
@@ -134,6 +134,17 @@ const AddClient = () => {
     }
   };
 
+  // One object URL per selected file, revoked when it changes or unmounts.
+  const preview = useMemo(
+    () => (client.image ? URL.createObjectURL(client.image) : null),
+    [client.image]
+  );
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
   /* ---------------- Success: invitation issued ---------------- */
   if (invitation) {
     return (
@@ -155,7 +166,11 @@ const AddClient = () => {
         />
 
         <div className="max-w-3xl space-y-5">
-          <Alert variant="success">{invitation.message}</Alert>
+          <Alert
+            variant={invitation.emailDelivery?.delivered ? "success" : "warning"}
+          >
+            {invitation.message}
+          </Alert>
 
           <Card>
             <CardBody className="space-y-4">
@@ -195,9 +210,10 @@ const AddClient = () => {
             </CardBody>
           </Card>
 
-          <Alert variant="info">
-            No email service is configured, so this link must be delivered manually. If it is
-            lost, use Resend invitation on the clients list to issue a new one.
+          <Alert variant={invitation.emailDelivery?.delivered ? "info" : "warning"}>
+            {invitation.emailDelivery?.delivered
+              ? "The email was accepted by the mail provider. Keep this one-time link as a backup - if it is lost, use Resend invitation on the clients list."
+              : "The email was not delivered. Share this one-time link manually. If it is lost, use Resend invitation on the clients list to issue a new one."}
           </Alert>
 
           <div className="flex flex-wrap gap-3">
@@ -228,7 +244,6 @@ const AddClient = () => {
   }
 
   /* ---------------- Form ---------------- */
-  const preview = client.image ? URL.createObjectURL(client.image) : null;
 
   return (
     <FormPage

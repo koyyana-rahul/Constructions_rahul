@@ -158,8 +158,8 @@ export const ClientButtons = ({ Id, name, userIdRef, isActivated }) => {
         title="Delete client"
         description={
           name
-            ? `"${name}" and their login account will be permanently removed.`
-            : "This client and their login account will be permanently removed."
+            ? `"${name}" and their login account will be permanently removed. Clients with projects, invoices or work requests cannot be deleted.`
+            : "This client and their login account will be permanently removed. Clients with projects, invoices or work requests cannot be deleted."
         }
         confirmLabel="Delete client"
         onCancel={confirm.close}

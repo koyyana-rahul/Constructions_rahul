@@ -1,8 +1,9 @@
 import {
   clientInvitationEmail,
   employeeInvitationEmail,
+  passwordResetEmail,
 } from "./templates.js";
-import { buildSetupLink } from "../../config/brand.js";
+import { buildResetLink, buildSetupLink } from "../../config/brand.js";
 import { isProviderConfigured, providerName, send } from "./providers.js";
 
 /**
@@ -97,6 +98,32 @@ export const sendClientInvitation = async ({ to, name, companyName, token }) => 
   });
 
   return { ...result, setupLink };
+};
+
+/** How long a reset link stays valid, in minutes. */
+export const resetTtlMinutes = () =>
+  Math.max(5, Number(process.env.RESET_TOKEN_TTL_MINUTES) || 60);
+
+/**
+ * Sends a password-reset email. Like invitations, this returns a delivery
+ * result instead of throwing so a mail outage cannot turn into a 500 response.
+ */
+export const sendPasswordReset = async ({ to, name, token }) => {
+  const resetLink = buildResetLink(token);
+  const message = passwordResetEmail({
+    name,
+    resetLink,
+    expiresInMinutes: resetTtlMinutes(),
+  });
+
+  const result = await sendEmail({
+    to,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+  });
+
+  return { ...result, resetLink };
 };
 
 /**

@@ -32,16 +32,23 @@ const getSummary = async (req, res) => {
       Employee.countDocuments({ isActive: { $ne: false } }),
       Department.countDocuments({ isArchived: { $ne: true } }),
       Department.countDocuments({ isArchived: true }),
-      Employee.aggregate([{ $group: { _id: null, total: { $sum: "$salary" } } }]),
+      Employee.aggregate([
+        { $match: { isActive: { $ne: false } } },
+        { $group: { _id: null, total: { $sum: "$salary" } } },
+      ]),
       Leave.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
       WorkRequest.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
       WorkRequest.countDocuments({ status: "Approved" }),
       Leave.countDocuments({ status: "Pending" }),
-      // Operational exception: today's attendance rows still unmarked.
+      // Operational exception: today's attendance rows still unmarked. Only
+      // current employees count; stale rows for departed staff are not work.
       (async () => {
         const { default: Attendance } = await import("../models/Attendance.js");
         const { businessDate } = await import("../middleware/defaultAttendance.js");
+        const activeIds = await Employee.distinct("_id", { isActive: { $ne: false } });
+        if (!activeIds.length) return 0;
         return Attendance.countDocuments({
+          employeeId: { $in: activeIds },
           date: businessDate(),
           $or: [{ status: null }, { status: { $exists: false } }],
         });
@@ -109,7 +116,7 @@ const getSummary = async (req, res) => {
       totalSalary: payrollAgg[0]?.total || 0,
       payrollCommitment: {
         monthlyConfiguredSalary: payrollAgg[0]?.total || 0,
-        basis: "Sum of Employee.salary for all employees",
+        basis: "Sum of configured monthly salary for active employees",
         note: "Configured payroll commitment, not a record of payments made",
       },
 

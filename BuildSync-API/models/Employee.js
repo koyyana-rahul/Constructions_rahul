@@ -12,6 +12,9 @@ const employeeSchema = new Schema({
   salary: { type: Number, required: true },
   // Deactivated when their site is archived, so they cannot be assigned work.
   isActive: { type: Boolean, default: true, index: true },
+  // Remembers which archive deactivated this employee. Restore only revives
+  // employees that the matching site archive actually deactivated.
+  deactivatedBySite: { type: Schema.Types.ObjectId, ref: "Department", index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

@@ -7,6 +7,9 @@ import {
   LuPlus,
   LuArrowRight,
   LuUser,
+  LuFolderKanban,
+  LuWallet,
+  LuActivity,
 } from "react-icons/lu";
 import PageHeader from "../ui/PageHeader";
 import StatCard from "../ui/StatCard";
@@ -16,6 +19,7 @@ import ProgressBar from "../ui/ProgressBar";
 import { Alert, CardSkeleton, EmptyState } from "../ui/Feedback";
 import { useCurrentUser } from "../../features/auth/useSession";
 import { useGetWorkRequestsQuery } from "../../services/api/endpoints/workRequestsApi";
+import { useGetReportOverviewQuery } from "../../services/api/endpoints/platformApi";
 import { getErrorMessage } from "../../lib/api";
 
 const ClientSummary = () => {
@@ -37,6 +41,9 @@ const ClientSummary = () => {
     isFetching,
     refetch,
   } = useGetWorkRequestsQuery();
+
+  const { data: operationsData } = useGetReportOverviewQuery();
+  const operations = operationsData?.overview;
 
   const list = requests ?? [];
   const approved = list.filter((r) => r.status === "Approved").length;
@@ -84,6 +91,65 @@ const ClientSummary = () => {
             <StatCard icon={LuCheckCircle2} label="Approved" value={approved} tone="success" />
             <StatCard icon={LuXCircle} label="Rejected" value={rejected} tone="danger" />
           </div>
+
+          {operations && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-navy-800">
+                  Project & billing snapshot
+                </h2>
+                <Link
+                  to="/client-dashboard/reports"
+                  className="inline-flex items-center gap-1 font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700"
+                >
+                  Full reports <LuArrowRight className="h-3 w-3" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <StatCard
+                  icon={LuFolderKanban}
+                  label="Projects"
+                  value={operations.projects?.total ?? 0}
+                  hint={`${operations.projects?.active ?? 0} in progress`}
+                  tone="navy"
+                />
+                <StatCard
+                  icon={LuActivity}
+                  label="Average progress"
+                  value={`${operations.projects?.averageProgress ?? 0}%`}
+                  hint="Across your projects"
+                  tone="accent"
+                />
+                <StatCard
+                  icon={LuWallet}
+                  label="Outstanding"
+                  value={new Intl.NumberFormat("en-IN", {
+                    style: "currency",
+                    currency: "INR",
+                    notation: "compact",
+                    maximumFractionDigits: 1,
+                  }).format(Number(operations.finance?.outstanding) || 0)}
+                  hint={`${operations.finance?.overdueCount ?? 0} overdue invoice(s)`}
+                  tone={operations.finance?.overdueCount ? "warning" : "success"}
+                />
+                <StatCard
+                  icon={LuCheckCircle2}
+                  label="Site reports"
+                  value={operations.recentReports?.length ?? 0}
+                  hint="Recent approved reports"
+                  tone="success"
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <Link to="/client-dashboard/invoices" className="font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700">
+                  View invoices
+                </Link>
+                <Link to="/client-dashboard/projects" className="font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700">
+                  View projects
+                </Link>
+              </div>
+            </div>
+          )}
 
           <Card>
             <CardHeader

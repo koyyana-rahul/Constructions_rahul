@@ -5,9 +5,12 @@ import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { Input } from "../ui/Form";
 import Button from "../ui/Button";
 import { Alert } from "../ui/Feedback";
-import { useCurrentUser } from "../../features/auth/useSession";
+import { useCurrentUser, useSignOut } from "../../features/auth/useSession";
 import { useChangePasswordMutation } from "../../services/api/endpoints/settingsApi";
 import { getErrorMessage } from "../../lib/api";
+
+const STRONG_PASSWORD =
+  /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{8,}$/;
 
 /**
  * Shared change-password form.
@@ -33,6 +36,7 @@ const ChangePassword = () => {
   const [notice, setNotice] = useState(null);
 
   const [changePassword, { isLoading: submitting }] = useChangePasswordMutation();
+  const signOut = useSignOut();
 
   const homeByRole = {
     admin: "/admin-dashboard",
@@ -51,8 +55,9 @@ const ChangePassword = () => {
     const next = {};
     if (!form.oldPassword) next.oldPassword = "Enter your current password";
     if (!form.newPassword) next.newPassword = "Enter a new password";
-    else if (form.newPassword.length < 6)
-      next.newPassword = "Password must be at least 6 characters";
+    else if (!STRONG_PASSWORD.test(form.newPassword))
+      next.newPassword =
+        "Use at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character";
     else if (form.newPassword === form.oldPassword)
       next.newPassword = "New password must be different from your current password";
     if (!form.confirmPassword) next.confirmPassword = "Confirm your new password";
@@ -75,8 +80,11 @@ const ChangePassword = () => {
         oldPassword: form.oldPassword,
         newPassword: form.newPassword,
       }).unwrap();
-      setNotice("Password updated successfully.");
       setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      // Changing the password revokes every existing token, including this
+      // one. Clear the local session and return to sign-in deliberately rather
+      // than letting the next API call fail with a confusing 401.
+      await signOut();
     } catch (err) {
       setError(getErrorMessage(err, "Unable to update your password."));
     }
@@ -128,7 +136,7 @@ const ChangePassword = () => {
                 name="newPassword"
                 type="password"
                 autoComplete="new-password"
-                placeholder="Minimum 6 characters"
+                placeholder="At least 8 characters, mixed case, number and symbol"
                 value={form.newPassword}
                 onChange={handleChange}
                 error={errors.newPassword}

@@ -6,6 +6,8 @@ import { useAppSelector } from "../../app/hooks";
 import { selectHomePath } from "../../features/auth/authSelectors";
 import { assetUrl } from "../../lib/api";
 import Avatar from "../ui/Avatar";
+import GlobalSearch from "./GlobalSearch";
+import NotificationsMenu from "./NotificationsMenu";
 
 const ROLE_LABELS = {
   admin: "Administrator",
@@ -50,7 +52,7 @@ const Topbar = ({ onOpenMobileNav }) => {
         <LuMenu className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      <div className="min-w-0 flex-1">
+      <div className="hidden min-w-0 flex-1 lg:block">
         <p className="truncate font-display text-2xs font-semibold uppercase tracking-[0.16em] text-concrete-500 sm:text-xs sm:tracking-wider">
           {ROLE_LABELS[user?.role] || "Portal"}
         </p>
@@ -58,6 +60,9 @@ const Topbar = ({ onOpenMobileNav }) => {
           Welcome back, {user?.name}
         </p>
       </div>
+
+      <GlobalSearch />
+      <NotificationsMenu />
 
       <div className="relative shrink-0" ref={menuRef}>
         <button

@@ -21,6 +21,7 @@ import {
 } from "../../services/api/endpoints/leavesApi";
 import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
+import { inclusiveDays } from "../../utils/dates";
 
 const LeaveDetail = () => {
   const { id } = useParams();
@@ -76,8 +77,7 @@ const LeaveDetail = () => {
 
   const employee = leave.employeeId || {};
   const profileImage = assetUrl(employee.userId?.profileImage);
-  const days =
-    Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) || 0;
+  const days = inclusiveDays(leave.startDate, leave.endDate);
 
   return (
     <>
@@ -163,7 +163,7 @@ const LeaveDetail = () => {
               <DetailField label="Duration" value={`${days} day(s)`} />
               <DetailField label="Start date" value={formatDate(leave.startDate)} />
               <DetailField label="End date" value={formatDate(leave.endDate)} />
-              <DetailField label="Applied on" value={formatDate(leave.createdAt)} />
+              <DetailField label="Applied on" value={formatDate(leave.appliedAt)} />
               <DetailField
                 label="Construction site"
                 value={employee.department?.dep_name}

@@ -72,13 +72,13 @@ const layout = (bodyRows) => `
   </body>
 </html>`;
 
-const button = (href) => `
+const button = (href, label = "Set up my password") => `
   <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 8px;">
     <tr>
       <td style="border-radius:8px;background:${BRAND_ORANGE};">
         <a href="${href}"
            style="display:inline-block;padding:13px 26px;font:700 14px/1 Arial,Helvetica,sans-serif;letter-spacing:.04em;color:#ffffff;text-decoration:none;border-radius:8px;">
-          Set up my password
+          ${label}
         </a>
       </td>
     </tr>
@@ -213,6 +213,59 @@ export const clientInvitationEmail = ({ name, companyName, setupLink, expiresInH
 
   return {
     subject: `Set up your ${APP_NAME} client account`,
+    html,
+    text,
+  };
+};
+
+/** Password reset. */
+export const passwordResetEmail = ({ name, resetLink, expiresInMinutes }) => {
+  const safeName = escapeHtml(name || "there");
+  const safeLink = escapeHtml(resetLink);
+
+  const html = layout(`
+    <tr>
+      <td style="padding:8px 32px 8px;">
+        ${paragraph(`Hello ${safeName},`)}
+        ${paragraph(
+          `We received a request to reset the password for your ${APP_NAME} account.`
+        )}
+        ${paragraph("Choose a new password using the secure link below:")}
+        ${button(safeLink, "Reset my password")}
+        ${muted(
+          `This link expires after ${expiresInMinutes} minutes and can only be used once.`
+        )}
+        ${muted(
+          "If the button does not work, copy this address into your browser:"
+        )}
+        ${muted(
+          `<span style="word-break:break-all;font-family:Menlo,Consolas,monospace;font-size:12px;">${safeLink}</span>`
+        )}
+        ${muted(
+          "If you did not request a password reset, you can ignore this email. Your password will not change."
+        )}
+      </td>
+    </tr>`);
+
+  const text = [
+    `Hello ${name || "there"},`,
+    "",
+    `We received a request to reset the password for your ${APP_NAME} account.`,
+    "",
+    "Choose a new password using the secure link below:",
+    resetLink,
+    "",
+    `This link expires after ${expiresInMinutes} minutes and can only be used once.`,
+    "",
+    "If you did not request a password reset, you can ignore this email. Your password will not change.",
+    "",
+    "Regards,",
+    `${APP_NAME} Team`,
+    APP_TAGLINE,
+  ].join("\n");
+
+  return {
+    subject: `Reset your ${APP_NAME} password`,
     html,
     text,
   };

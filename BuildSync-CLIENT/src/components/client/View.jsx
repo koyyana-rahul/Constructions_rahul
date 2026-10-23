@@ -26,29 +26,31 @@ const ClientView = () => {
   const { id } = useParams();
   const user = useCurrentUser();
 
-  // The route id is the Client record id on the admin route and the User id on
-  // the self-service route, so this comparison is the "am I looking at myself?"
-  // test rather than an authorization check.
-  const isSelf = user?.role === "client" && (user?._id === id || client?.userId?._id === id);
-
   const {
     data: client,
     error,
     isLoading: loading,
   } = useGetClientQuery(id, { skip: !id });
 
+  // The route id is the Client record id on the admin route and the User id on
+  // the self-service route, so this comparison is the "am I looking at myself?"
+  // test rather than an authorization check.
+  const isSelf = user?.role === "client" && (user?._id === id || client?.userId?._id === id);
+
   // Work requests are supplementary context; the server already scopes this
-  // list to the caller, so nothing is filtered in the browser.
+  // list to the caller, so a client only receives their own requests and no
+  // browser-side filtering is needed for them.
   const { data: allRequests = [] } = useGetWorkRequestsQuery(
     { limit: 100 },
-    { skip: user?.role !== "admin" }
+    { skip: user?.role !== "admin" && !isSelf }
   );
 
   const requests = useMemo(() => {
+    if (isSelf) return allRequests;
     if (user?.role !== "admin") return [];
     const owner = client?.userId?._id ?? client?._id ?? id;
     return allRequests.filter((request) => request.clientId?._id === owner);
-  }, [allRequests, client, id, user?.role]);
+  }, [allRequests, client, id, isSelf, user?.role]);
 
   if (loading) return <PageLoader label="Loading client profile" />;
 
@@ -204,8 +206,8 @@ const ClientView = () => {
                           <p className="truncate font-display text-sm font-medium text-navy-800">
                             {request.name}
                           </p>
-                          <p className="text-xs text-concrete-500">
-                            {request.requestType}
+                          <p className="truncate text-xs text-concrete-500">
+                            {request.description || "Work request"}
                             {request.startDate
                               ? ` · ${new Date(request.startDate).toLocaleDateString()}`
                               : ""}

@@ -10,6 +10,8 @@ import {
   LuUserPlus,
   LuBuilding,
   LuCheckCircle2,
+  LuPackage,
+  LuShieldAlert,
 } from "react-icons/lu";
 import PageHeader from "../ui/PageHeader";
 import StatCard from "../ui/StatCard";
@@ -19,6 +21,7 @@ import { StatusBadge } from "../ui/Badge";
 import { Alert, CardSkeleton, EmptyState, PermissionDenied } from "../ui/Feedback";
 import { getErrorMessage, isPermissionError } from "../../lib/api";
 import { useGetDashboardSummaryQuery } from "../../services/api/endpoints/dashboardApi";
+import { useGetReportOverviewQuery } from "../../services/api/endpoints/platformApi";
 import StatusBreakdown from "./StatusBreakdown";
 import { formatINRCompact } from "../../utils/format";
 
@@ -124,6 +127,8 @@ const AdminSummary = () => {
     isFetching,
     refetch: fetchSummary,
   } = useGetDashboardSummaryQuery();
+  const { data: operationsData } = useGetReportOverviewQuery();
+  const operations = operationsData?.overview;
 
   const exceptions = useMemo(() => {
     const source = summary?.operationalExceptions;
@@ -244,6 +249,52 @@ const AdminSummary = () => {
               />
             </div>
           </section>
+
+          {operations && (
+            <section aria-label="Live operations snapshot">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-navy-800">
+                  Operations snapshot
+                </h2>
+                <Link
+                  to="/admin-dashboard/reports"
+                  className="inline-flex items-center gap-1 font-display text-xs font-semibold uppercase tracking-wide text-accent-600 hover:text-accent-700"
+                >
+                  Full reports <LuArrowRight className="h-3 w-3" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <StatCard
+                  icon={LuWallet}
+                  label="Outstanding"
+                  value={formatINRCompact(operations.finance?.outstanding)}
+                  hint={`${formatINRCompact(operations.finance?.overdue?.amount)} overdue`}
+                  tone={operations.finance?.overdue?.amount ? "danger" : "success"}
+                />
+                <StatCard
+                  icon={LuClipboardCheck}
+                  label="Open tasks"
+                  value={operations.tasks?.open ?? 0}
+                  hint={`${operations.tasks?.overdue ?? 0} overdue`}
+                  tone={operations.tasks?.overdue ? "warning" : "navy"}
+                />
+                <StatCard
+                  icon={LuPackage}
+                  label="Low stock"
+                  value={operations.inventory?.lowStockCount ?? 0}
+                  hint="At or below reorder"
+                  tone={operations.inventory?.lowStockCount ? "warning" : "success"}
+                />
+                <StatCard
+                  icon={LuShieldAlert}
+                  label="Open incidents"
+                  value={operations.safety?.openIncidents ?? 0}
+                  hint={`${operations.safety?.criticalOpen ?? 0} high or critical`}
+                  tone={operations.safety?.criticalOpen ? "danger" : "accent"}
+                />
+              </div>
+            </section>
+          )}
 
           {/* 2. Queue analytics */}
           <section aria-label="Request pipeline">

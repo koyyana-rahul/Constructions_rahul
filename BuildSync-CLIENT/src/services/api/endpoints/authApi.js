@@ -47,11 +47,12 @@ export const authApi = baseApi.injectEndpoints({
 
     forgotPassword: builder.mutation({
       query: (body) => ({ url: "/auth/forgot-password", method: "POST", body }),
-      // `resetToken` is returned so the two-step form can carry it straight
-      // into /auth/reset-password without a second round trip.
+      // The server deliberately returns the same response for every address.
+      // The reset token is only ever delivered by email, never in JSON.
       transformResponse: (res) => ({
-        message: res?.message ?? "Password reset link sent.",
-        resetToken: res?.resetToken ?? null,
+        message:
+          res?.message ??
+          "If an account exists for that email address, a password reset link has been sent.",
       }),
     }),
 
@@ -91,8 +92,13 @@ export const authApi = baseApi.injectEndpoints({
         url: `/auth/invitations/${userId}/resend`,
         method: "POST",
       }),
-      transformResponse: (res) => ({ activationToken: res?.activationToken ?? null }),
-      invalidatesTags: [TAGS.Clients],
+      transformResponse: (res) => ({
+        activationToken: res?.activationToken ?? null,
+        expiresAt: res?.expiresAt ?? null,
+        message: res?.message ?? "Invitation re-issued.",
+        emailDelivery: res?.emailDelivery ?? null,
+      }),
+      invalidatesTags: [TAGS.Clients, TAGS.Employees],
     }),
   }),
 });

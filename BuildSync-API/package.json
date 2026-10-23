@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --env-file-if-exists=.env --env-file=.env.test --test tests/*.test.js",
-    "start": "nodemon --env-file-if-exists=.env index.js",
+    "start": "node --env-file-if-exists=.env index.js",
+    "dev": "nodemon --env-file-if-exists=.env index.js",
     "test:watch": "node --env-file-if-exists=.env --env-file=.env.test --test --watch tests/*.test.js",
     "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
     "seed": "node --env-file-if-exists=.env userSeed.js",

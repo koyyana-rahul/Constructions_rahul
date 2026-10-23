@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import path from "path";
+import { fileURLToPath } from "url";
 import authRouter from "./routes/auth.js";
 import departmentRouter from "./routes/department.js";
 import employeeRouter from "./routes/employee.js";
@@ -11,6 +13,22 @@ import settingRouter from "./routes/setting.js";
 import attendanceRouter from "./routes/attendance.js";
 import dashboardRouter from "./routes/dashboard.js";
 import workRequestRouter from "./routes/workRequest.js";
+import projectRouter from "./routes/project.js";
+import taskRouter from "./routes/task.js";
+import dailyReportRouter from "./routes/dailyReport.js";
+import materialRouter from "./routes/material.js";
+import vendorRouter from "./routes/vendor.js";
+import expenseRouter from "./routes/expense.js";
+import invoiceRouter from "./routes/invoice.js";
+import equipmentRouter from "./routes/equipment.js";
+import safetyRouter from "./routes/safety.js";
+import documentRouter from "./routes/document.js";
+import notificationRouter from "./routes/notification.js";
+import organizationRouter from "./routes/organization.js";
+import reportRouter from "./routes/report.js";
+import searchRouter from "./routes/search.js";
+import auditRouter from "./routes/audit.js";
+import assistantRouter from "./routes/assistant.js";
 import ApiError from "./utils/ApiError.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import { requireCsrf } from "./middleware/csrf.js";
@@ -81,12 +99,21 @@ const corsOptions = {
  * The Express application, separated from the server bootstrap so tests can
  * mount it without binding a port.
  */
+const API_ROOT = fileURLToPath(new URL(".", import.meta.url));
+
 export const createApp = () => {
   const app = express();
 
+  // Behind a reverse proxy the client IP arrives in X-Forwarded-For. Only
+  // trust it when the operator explicitly opts in, otherwise a client could
+  // spoof the header and bypass IP-based rate limits.
+  if (process.env.TRUST_PROXY === "true") {
+    app.set("trust proxy", 1);
+  }
+
   app.use(cors(corsOptions));
   app.use(express.json());
-  app.use(express.static("public/uploads"));
+  app.use(express.static(path.join(API_ROOT, "public", "uploads")));
 
   /**
    * Readiness probe.
@@ -134,6 +161,22 @@ export const createApp = () => {
   app.use("/api/attendance", attendanceRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/work-request", workRequestRouter);
+  app.use("/api/project", projectRouter);
+  app.use("/api/task", taskRouter);
+  app.use("/api/daily-report", dailyReportRouter);
+  app.use("/api/material", materialRouter);
+  app.use("/api/vendor", vendorRouter);
+  app.use("/api/expense", expenseRouter);
+  app.use("/api/invoice", invoiceRouter);
+  app.use("/api/equipment", equipmentRouter);
+  app.use("/api/safety", safetyRouter);
+  app.use("/api/document", documentRouter);
+  app.use("/api/notification", notificationRouter);
+  app.use("/api/organization", organizationRouter);
+  app.use("/api/report", reportRouter);
+  app.use("/api/search", searchRouter);
+  app.use("/api/audit", auditRouter);
+  app.use("/api/assistant", assistantRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

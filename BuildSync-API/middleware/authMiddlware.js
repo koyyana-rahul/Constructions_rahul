@@ -74,6 +74,21 @@ const authenticate = async (req, res, next) => {
       });
     }
 
+    // Password changes increment sessionVersion. A token issued before the
+    // change is no longer accepted, so resetting a password terminates every
+    // other signed-in device. Tokens without the claim predate this check and
+    // remain compatible.
+    if (
+      decoded.sessionVersion !== undefined &&
+      Number(decoded.sessionVersion) !== (Number(user.sessionVersion) || 0)
+    ) {
+      return res.status(401).json({
+        success: false,
+        error: "Your password was changed. Please sign in again.",
+        code: "SESSION_REVOKED",
+      });
+    }
+
     // The token's role claim is never trusted; the live document is the source
     // of truth so a role change takes effect immediately.
     req.user = user;

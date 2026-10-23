@@ -23,6 +23,7 @@ import {
 } from "../../services/api/endpoints/workRequestsApi";
 import { getErrorMessage, isPermissionError, assetUrl } from "../../lib/api";
 import { formatDate } from "../../utils/tableUtils";
+import { inclusiveDays } from "../../utils/dates";
 
 const WorkDetail = () => {
   const { id } = useParams();
@@ -83,7 +84,7 @@ const WorkDetail = () => {
   const client = request.clientId || {};
   const avatar = assetUrl(client.userId?.profileImage);
   const days =
-    Math.round((new Date(request.endDate) - new Date(request.startDate)) / 86400000) || 0;
+    inclusiveDays(request.startDate, request.endDate);
 
   return (
     <>

@@ -1,7 +1,13 @@
+import mongoose from "mongoose";
 import connectToDatabase from "./db/db.js";
 import createApp from "./app.js";
+import { validateStartupEnvironment } from "./config/validateEnv.js";
 
 const start = async () => {
+  // Fail fast on an unsafe or incomplete deployment instead of discovering a
+  // bad JWT secret when the first user tries to sign in.
+  validateStartupEnvironment();
+
   // Await the connection so the server does not begin accepting requests
   // against a database that is not ready yet.
   await connectToDatabase();
@@ -36,10 +42,13 @@ const start = async () => {
     process.exit(1);
   });
 
-  // nodemon restarts the process; release the port cleanly on shutdown.
+  // Release both the HTTP listener and the database connection cleanly.
   const shutdown = (signal) => {
     console.log(`\n${signal} received, shutting down`);
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      await mongoose.connection.close().catch(() => {});
+      process.exit(0);
+    });
     setTimeout(() => process.exit(0), 5000).unref();
   };
 

@@ -6,6 +6,7 @@ import { Input, Select, Textarea } from "../ui/Form";
 import { useAddLeaveMutation } from "../../services/api/endpoints/leavesApi";
 import { getErrorMessage } from "../../lib/api";
 import { useCurrentUser } from "../../features/auth/useSession";
+import { inclusiveDays } from "../../utils/dates";
 
 const LEAVE_TYPES = ["Sick Leave", "Casual Leave", "Annual Leave"];
 
@@ -63,7 +64,7 @@ const AddLeave = () => {
 
   const dayCount =
     leave.startDate && leave.endDate && leave.endDate >= leave.startDate
-      ? Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) || 0
+      ? inclusiveDays(leave.startDate, leave.endDate)
       : null;
 
   return (
