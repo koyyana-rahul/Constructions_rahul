@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
+import { v2 as cloudinaryUploader } from "cloudinary";
 
 /**
  * Paths are anchored to the API package, not the process working directory.
@@ -155,6 +156,66 @@ const uploadReceipt = multer({
   ),
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
 });
+
+/**
+ * Cloudinary integration for Builtra file uploads.
+ *
+ * After multer saves a file to disk, this helper uploads it to Cloudinary
+ * and returns the secure URL. If CLOUDINARY_URL is not configured, it
+ * returns the local file path as a fallback so development can proceed
+ * without a Cloudinary account.
+ */
+export const uploadFileFromMulter = async (req, fieldName) => {
+  if (!req.file) {
+    throw new Error("No file uploaded");
+  }
+
+  // Check if Cloudinary is configured
+  if (!process.env.CLOUDINARY_URL) {
+    // Return local path as fallback
+    return req.file.path;
+  }
+
+  const result = await cloudinaryUploader.uploader.upload_large(
+    req.file.path,
+    {
+      folder: getFolderForField(fieldName),
+      resource_type: getResourceTypeForField(fieldName),
+      chunk_size: 6_000_000,
+    }
+  );
+
+  // Clean up local temp file
+  try {
+    fs.unlinkSync(req.file.path);
+  } catch (e) {
+    // ignore cleanup errors
+  }
+
+  return result.secure_url;
+};
+
+export const getFolderForField = (fieldName) => {
+  const folderMap = {
+    image: "profiles",
+    photos: "reports",
+    document: "documents",
+    receipt: "receipts",
+    default: "builtra",
+  };
+  return folderMap[fieldName] || folderMap.default;
+};
+
+export const getResourceTypeForField = (fieldName) => {
+  const resourceTypeMap = {
+    image: "image",
+    photos: "image",
+    document: "raw",
+    receipt: "raw",
+    default: "raw",
+  };
+  return resourceTypeMap[fieldName] || resourceTypeMap.default;
+};
 
 export default upload;
 export {

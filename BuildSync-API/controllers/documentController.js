@@ -6,6 +6,7 @@ import Project from "../models/Project.js";
 import Department from "../models/Department.js";
 import ApiError from "../utils/ApiError.js";
 import { recordAudit } from "../services/auditService.js";
+import { uploadFileFromMulter } from "../middleware/multerConfig.js";
 import {
   clientForUser,
   employeeForUser,
@@ -14,7 +15,6 @@ import {
   isAdmin,
 } from "../services/accessService.js";
 import { getPagination, paginationMeta } from "../utils/pagination.js";
-import { PRIVATE_DOCUMENT_DIR } from "../middleware/multerConfig.js";
 
 export const DOCUMENT_CATEGORIES = [
   "Drawing",
@@ -192,12 +192,22 @@ export const uploadDocument = async (req, res) => {
     throw ApiError.badRequest("Attach the document to a project or a site", { code: "MISSING_FIELD" });
   }
 
+  // Upload to Cloudinary (or keep local fallback)
+  let cloudinaryUrl;
+  try {
+    cloudinaryUrl = await uploadFileFromMulter(req, "file");
+  } catch (uploadError) {
+    console.error("Cloudinary upload failed, falling back to local storage:", uploadError.message);
+    // Keep the local filename as fallback
+    cloudinaryUrl = req.file.path;
+  }
+
   const document = await DocumentFile.create({
     project: project?._id,
     site: site || undefined,
     category,
     name: String(name || "").trim() || path.parse(req.file.originalname).name.slice(0, 200),
-    filename: req.file.filename,
+    filename: cloudinaryUrl,
     originalName: req.file.originalname,
     mimetype: req.file.mimetype,
     size: req.file.size,

@@ -142,6 +142,17 @@ export const createExpense = async (req, res) => {
   const vendor = await optionalRef(Vendor, vendorId, "vendor");
   const tax = Math.max(0, Number(taxAmount) || 0);
 
+  // Upload receipt to Cloudinary (or keep local fallback)
+  let receiptUrl = req.file ? req.file.filename : undefined;
+  if (req.file) {
+    try {
+      receiptUrl = await uploadFileFromMulter(req, "receipt");
+    } catch (uploadError) {
+      console.error("Cloudinary upload failed, falling back to local storage:", uploadError.message);
+      receiptUrl = req.file.path;
+    }
+  }
+
   const expense = await Expense.create({
     project: project?._id,
     site: site || undefined,
@@ -155,7 +166,7 @@ export const createExpense = async (req, res) => {
     paymentMethod,
     reference,
     notes,
-    receipt: req.file ? req.file.filename : undefined,
+    receipt: receiptUrl,
     status: "Pending",
     createdBy: req.user._id,
   });
